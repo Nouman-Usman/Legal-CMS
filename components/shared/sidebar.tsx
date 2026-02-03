@@ -99,6 +99,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                         { name: 'Messages', href: '/dashboard/lawyer/messages', icon: MessageSquare },
                         { name: 'My Calendar', href: '/dashboard/lawyer/calendar', icon: Calendar },
                     ]
+                },
+                {
+                    label: 'Account',
+                    items: [
+                        { name: 'Profile Settings', href: '/dashboard/lawyer/profile', icon: UserIcon },
+                    ]
                 }
             ];
         }

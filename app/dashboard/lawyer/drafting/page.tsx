@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -186,10 +187,12 @@ export default function DraftingPage() {
                                                 </span>
                                             </div>
                                             <div className="flex gap-2">
-                                                <Button className="flex-1 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white rounded-xl font-bold gap-2">
-                                                    <FileEdit className="w-4 h-4" />
-                                                    Draft
-                                                </Button>
+                                                <Link href={`/dashboard/lawyer/drafting/${template.id}`} className="flex-1">
+                                                    <Button className="w-full bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white rounded-xl font-bold gap-2">
+                                                        <FileEdit className="w-4 h-4" />
+                                                        Draft
+                                                    </Button>
+                                                </Link>
                                                 <Button variant="outline" size="icon" className="rounded-xl border-slate-200 dark:border-slate-800 hover:bg-white flex-shrink-0">
                                                     <Download className="w-4 h-4" />
                                                 </Button>

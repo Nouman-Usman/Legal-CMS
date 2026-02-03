@@ -3,13 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
-import { getCalendarEvents } from '@/lib/supabase/calendar';
+import { getLawyerCalendarEvents } from '@/lib/supabase/calendar';
 import { createClient } from '@/lib/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { EventModal } from '@/components/shared/event-modal';
-import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import {
     ChevronLeft,
     ChevronRight,
@@ -18,7 +16,6 @@ import {
     MapPin,
     Plus,
     Loader2,
-    AlertCircle,
     Briefcase,
     CheckCircle2,
     Filter,
@@ -28,15 +25,12 @@ import {
     Scale,
     Gavel,
     Bell,
-    MoreVertical,
-    Edit2,
-    Trash2,
-    Download
+    MoreVertical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
-export default function CalendarPage() {
+export default function LawyerCalendarPage() {
     const { user } = useAuth();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [events, setEvents] = useState<any[]>([]);
@@ -44,10 +38,8 @@ export default function CalendarPage() {
     const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
     const [view, setView] = useState<'grid' | 'list'>('grid');
     const [filterType, setFilterType] = useState<'all' | 'hearing' | 'task'>('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showEventModal, setShowEventModal] = useState(false);
-    const [selectedEvent, setSelectedEvent] = useState<any>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [connecting, setConnecting] = useState(false);
+    const supabase = createClient();
 
     // Calculate calendar days
     const calendarDays = useMemo(() => {
@@ -96,20 +88,21 @@ export default function CalendarPage() {
     }, [currentDate]);
 
     const loadEvents = async () => {
-        if (!user?.chamber_id) return;
+        if (!user?.chamber_id || !user?.id) return;
 
         const startDate = calendarDays[0].date;
         const endDate = calendarDays[calendarDays.length - 1].date;
 
         setLoading(true);
-        const { events: fetchedEvents } = await getCalendarEvents(user.chamber_id, startDate, endDate);
+        // Use the lawyer-specific fetch function
+        const { events: fetchedEvents } = await getLawyerCalendarEvents(user.id, user.chamber_id, startDate, endDate);
         setEvents(fetchedEvents || []);
         setLoading(false);
     };
 
     useEffect(() => {
         loadEvents();
-    }, [currentDate, user?.chamber_id]);
+    }, [currentDate, user?.chamber_id, user?.id]);
 
     const getDayEvents = (date: Date) => {
         return events.filter(e => {
@@ -121,18 +114,14 @@ export default function CalendarPage() {
 
             const isSameType = filterType === 'all' || e.type === filterType;
 
-            const matchesSearch = searchQuery === '' || 
-                e.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                e.caseNumber?.toLowerCase().includes(searchQuery.toLowerCase());
-
-            return isSameDay && isSameType && matchesSearch;
+            return isSameDay && isSameType;
         });
     };
 
     const selectedEvents = useMemo(() => {
         if (!selectedDate) return [];
         return getDayEvents(selectedDate);
-    }, [selectedDate, events, filterType, searchQuery]);
+    }, [selectedDate, events, filterType]);
 
     const stats = useMemo(() => {
         const monthEvents = events.filter(e => {
@@ -148,91 +137,13 @@ export default function CalendarPage() {
         };
     }, [events, currentDate]);
 
-    const [connecting, setConnecting] = useState(false);
-    const supabase = createClient();
-
-    const handleOpenCreateModal = () => {
-        setSelectedEvent(null);
-        setShowEventModal(true);
-    };
-
-    const handleOpenEditModal = (event: any) => {
-        setSelectedEvent(event);
-        setShowEventModal(true);
-    };
-
-    const handleDeleteEvent = async () => {
-        if (!selectedEvent) return;
-
-        try {
-            const response = await fetch('/api/calendar/delete', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: selectedEvent.id,
-                    type: selectedEvent.type
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to delete event');
-            }
-
-            setShowDeleteConfirm(false);
-            setSelectedEvent(null);
-            loadEvents();
-        } catch (error) {
-            console.error('Error deleting event:', error);
-        }
-    };
-
-    const handleEventSuccess = () => {
-        loadEvents();
-    };
-
-    const handleExportCalendar = async (format: 'ics' | 'csv') => {
-        if (!user?.chamber_id) return;
-
-        try {
-            const startDate = calendarDays[0].date.toISOString().split('T')[0];
-            const endDate = calendarDays[calendarDays.length - 1].date.toISOString().split('T')[0];
-
-            const response = await fetch('/api/calendar/export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chamberId: user.chamber_id,
-                    startDate,
-                    endDate,
-                    format
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to export calendar');
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `calendar-${new Date().toISOString().split('T')[0]}.${format === 'ics' ? 'ics' : 'csv'}`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error('Error exporting calendar:', error);
-        }
-    };
-
     const handleConnectGoogle = async () => {
         setConnecting(true);
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/dashboard/chambers-admin/calendar`,
+                    redirectTo: `${window.location.origin}/dashboard/lawyer/calendar`,
                     scopes: 'https://www.googleapis.com/auth/calendar',
                     queryParams: {
                         access_type: 'offline',
@@ -252,7 +163,7 @@ export default function CalendarPage() {
     };
 
     return (
-        <ProtectedRoute requiredRole="chamber_admin">
+        <ProtectedRoute requiredRole="lawyer">
             <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
                 {/* Advanced Header Bar */}
                 <header className="flex items-center justify-between px-8 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10">
@@ -260,9 +171,9 @@ export default function CalendarPage() {
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                                 <CalendarIcon className="w-6 h-6 text-indigo-600" />
-                                Legal Calendar
+                                My Calendar
                             </h1>
-                            <p className="text-xs font-medium text-slate-400 mt-0.5 uppercase tracking-widest">Chambers Management System</p>
+                            <p className="text-xs font-medium text-slate-400 mt-0.5 uppercase tracking-widest">Lawyer Dashboard</p>
                         </div>
 
                         <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
@@ -290,20 +201,20 @@ export default function CalendarPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                    <div className="relative group hidden md:block">
+                        <div className="relative group hidden md:block">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search events..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
                             />
                         </div>
-                        <Button onClick={handleOpenCreateModal} className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 rounded-xl gap-2 h-10 px-5 transition-all active:scale-95">
+                        {/* 
+                        <Button className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 rounded-xl gap-2 h-10 px-5 transition-all active:scale-95">
                             <Plus className="w-4 h-4" />
                             <span className="font-bold">Schedule Event</span>
                         </Button>
+                        */}
                     </div>
                 </header>
 
@@ -315,8 +226,8 @@ export default function CalendarPage() {
                     </div>
                     {[
                         { label: 'Month Overiew', value: stats.total, color: 'text-indigo-600', icon: CalendarIcon },
-                        { label: 'Court Hearings', value: stats.hearings, color: 'text-amber-600', icon: Scale },
-                        { label: 'Case Tasks', value: stats.tasks, color: 'text-emerald-600', icon: CheckCircle2 },
+                        { label: 'My Hearings', value: stats.hearings, color: 'text-amber-600', icon: Scale },
+                        { label: 'My Tasks', value: stats.tasks, color: 'text-emerald-600', icon: CheckCircle2 },
                         { label: 'Priority Alerts', value: stats.urgent, color: 'text-rose-600', icon: Bell },
                     ].map((stat, i) => (
                         <div key={i} className="flex items-center gap-2">
@@ -386,26 +297,6 @@ export default function CalendarPage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
                                     <div className="w-2 h-2 rounded-full bg-indigo-600" /> Firm Events
-                                </div>
-                                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => handleExportCalendar('ics')}
-                                        className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
-                                    >
-                                        <Download className="h-3 w-3" />
-                                        iCal
-                                    </Button>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => handleExportCalendar('csv')}
-                                        className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
-                                    >
-                                        <Download className="h-3 w-3" />
-                                        CSV
-                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -518,89 +409,68 @@ export default function CalendarPage() {
                                 </div>
                             ) : selectedEvents.length > 0 ? (
                                 selectedEvents.map((event: any) => (
-                                    <div key={event.id} className="group relative p-5 bg-slate-50 dark:bg-slate-800/30 rounded-[24px] border border-transparent hover:border-indigo-500/30 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
-                                        {/* Status bar */}
-                                        <div className={cn(
-                                            "absolute left-0 top-0 bottom-0 w-1.5 transition-all",
-                                            event.type === 'hearing' ? "bg-amber-400" : "bg-indigo-600"
-                                        )} />
+                                    <Link key={event.id} href={`/dashboard/lawyer/cases/${event.caseId}`} className="block">
+                                        <div className="group relative p-5 bg-slate-50 dark:bg-slate-800/30 rounded-[24px] border border-transparent hover:border-indigo-500/30 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
+                                            {/* Status bar */}
+                                            <div className={cn(
+                                                "absolute left-0 top-0 bottom-0 w-1.5 transition-all",
+                                                event.type === 'hearing' ? "bg-amber-400" : "bg-indigo-600"
+                                            )} />
 
-                                        <div className="flex flex-col gap-4">
-                                            <div className="flex justify-between items-start">
-                                                <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="flex-1">
-                                                    <div className="flex flex-col cursor-pointer hover:text-indigo-600 transition-colors">
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex flex-col">
                                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                             {new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                         <h4 className="font-bold text-slate-900 dark:text-white mt-1 group-hover:text-indigo-600 transition-colors">{event.title}</h4>
                                                     </div>
-                                                </Link>
-                                                <div className="flex items-center gap-1.5">
                                                     <div className={cn(
                                                         "p-2 rounded-xl transition-all",
                                                         event.type === 'hearing' ? "bg-amber-500/10 text-amber-600" : "bg-indigo-500/10 text-indigo-600"
                                                     )}>
                                                         {event.type === 'hearing' ? <Gavel className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                                                     </div>
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handleOpenEditModal(event)}
-                                                            className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                                            title="Edit event"
-                                                        >
-                                                            <Edit2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedEvent(event);
-                                                                setShowDeleteConfirm(true);
-                                                            }}
-                                                            className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                                            title="Delete event"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 w-full" />
-
-                                            <div className="space-y-2.5">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center">
-                                                        <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Case Ref.</span>
-                                                        <span className="text-xs font-black text-slate-700 dark:text-slate-300">{event.caseNumber}</span>
-                                                    </div>
                                                 </div>
 
-                                                {event.description && (
+                                                <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 w-full" />
+
+                                                <div className="space-y-2.5">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center">
-                                                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                                            <Briefcase className="w-3.5 h-3.5 text-slate-400" />
                                                         </div>
                                                         <div className="flex flex-col">
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Location / Venue</span>
-                                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 truncate w-48">{event.description}</span>
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Case Ref.</span>
+                                                            <span className="text-xs font-black text-slate-700 dark:text-slate-300">{event.caseNumber}</span>
                                                         </div>
                                                     </div>
-                                                )}
-                                            </div>
 
-                                            <div className="flex items-center justify-between mt-2">
-                                                <div className="flex -space-x-2">
-                                                    <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white dark:border-slate-800" />
-                                                    <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-white dark:border-slate-800" />
+                                                    {event.description && (
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center">
+                                                                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Location / Venue</span>
+                                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 truncate w-48">{event.description}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                                    View Case <ChevronRight className="w-3 h-3" />
-                                                </Link>
+
+                                                <div className="flex items-center justify-between mt-2">
+                                                    <div className="flex -space-x-2">
+                                                        <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white dark:border-slate-800" />
+                                                        <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-white dark:border-slate-800" />
+                                                    </div>
+                                                    <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                                        View Case <ChevronRight className="w-3 h-3" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    </Link>
                                 ))
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -647,24 +517,6 @@ export default function CalendarPage() {
                         </div>
                     </aside>
                 </main>
-
-                {/* Event Modal */}
-                <EventModal 
-                    isOpen={showEventModal} 
-                    onClose={() => setShowEventModal(false)} 
-                    onSuccess={handleEventSuccess}
-                    event={selectedEvent}
-                    mode={selectedEvent ? 'edit' : 'create'}
-                />
-
-                {/* Delete Confirmation Dialog */}
-                <DeleteConfirmDialog
-                    isOpen={showDeleteConfirm}
-                    onClose={() => setShowDeleteConfirm(false)}
-                    onConfirm={handleDeleteEvent}
-                    title="Delete Event"
-                    description={`Are you sure you want to delete "${selectedEvent?.title}"? This action cannot be undone.`}
-                />
             </div>
         </ProtectedRoute>
     );

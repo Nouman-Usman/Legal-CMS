@@ -281,7 +281,7 @@ export async function getCaseNotes(caseId: string, userId?: string) {
       .from('messages')
       .select('*, sender:sender_id(full_name)')
       .eq('thread_id', thread.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
 
     if (error) throw error;
 
