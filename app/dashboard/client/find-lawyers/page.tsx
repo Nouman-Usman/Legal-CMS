@@ -3,11 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { ProtectedRoute } from '@/lib/components/protected-route';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, MapPin, Star, Phone, Mail, ArrowRight, Filter, Grid3x3, List, CheckCircle2, Loader2 } from 'lucide-react';
+import {
+  Search,
+  MapPin,
+  Star,
+  Phone,
+  Mail,
+  ArrowRight,
+  Filter,
+  Grid3x3,
+  List,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  Award,
+  Clock,
+  ExternalLink,
+  ChevronRight,
+  Gavel,
+  Sparkles
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Lawyer {
   id: string;
@@ -36,10 +56,7 @@ export default function FindLawyersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
-  const [minRating, setMinRating] = useState(0);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Fetch lawyers from database
   useEffect(() => {
     const fetchLawyers = async () => {
       try {
@@ -56,372 +73,195 @@ export default function FindLawyersPage() {
         const typedLawyers = (data || []) as Lawyer[];
         setLawyers(typedLawyers);
 
-        // Extract and deduplicate practice areas from all lawyers
-        const areas = Array.from(
-          new Set(
-            typedLawyers.flatMap(lawyer => lawyer.lawyer_profile?.practiceAreas || [])
-          )
-        ).sort((a, b) => a.localeCompare(b));
+        const areas = Array.from(new Set(typedLawyers.flatMap(lawyer => lawyer.lawyer_profile?.practiceAreas || []))).sort();
         setPracticeAreas(areas);
 
-        // Extract and deduplicate locations from lawyer_profile
-        const uniqueLocations = Array.from(
-          new Set(
-            typedLawyers
-              .map(lawyer => lawyer.lawyer_profile?.location)
-              .filter(Boolean) as string[]
-          )
-        ).sort((a, b) => a.localeCompare(b));
-        setLocations(uniqueLocations.length > 0 ? uniqueLocations : []);
+        const uniqueLocations = Array.from(new Set(typedLawyers.map(lawyer => lawyer.lawyer_profile?.location).filter(Boolean) as string[])).sort();
+        setLocations(uniqueLocations);
       } catch (error) {
         console.error('Error fetching lawyers:', error);
-        setLawyers([]);
       } finally {
         setLoading(false);
       }
     };
-
     fetchLawyers();
   }, []);
 
-  // Filter lawyers based on search and selected filters
   const filteredLawyers = lawyers.filter((lawyer) => {
-    const practiceAreasFromProfile = lawyer.lawyer_profile?.practiceAreas || [];
-    const tagline = lawyer.lawyer_profile?.tagline || '';
-    const bio = lawyer.lawyer_profile?.bio || '';
-    const lawyerLocation = lawyer.lawyer_profile?.location || '';
+    const profile = lawyer.lawyer_profile;
+    const matchesSearch = lawyer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      profile?.tagline?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      profile?.practiceAreas?.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesSearch = 
-      lawyer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      practiceAreasFromProfile.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    // Filter by location - exact match with selected location
-    const matchesLocation = !selectedLocation || lawyerLocation === selectedLocation;
-
-    const matchesSpecialties = selectedSpecialties.length === 0 || 
-      selectedSpecialties.some(spec => practiceAreasFromProfile.includes(spec));
+    const matchesLocation = !selectedLocation || profile?.location === selectedLocation;
+    const matchesSpecialties = selectedSpecialties.length === 0 || selectedSpecialties.some(spec => profile?.practiceAreas?.includes(spec));
 
     return matchesSearch && matchesLocation && matchesSpecialties;
   });
 
-  const toggleSpecialty = (specialty: string) => {
-    setSelectedSpecialties(prev =>
-      prev.includes(specialty)
-        ? prev.filter(s => s !== specialty)
-        : [...prev, specialty]
+  if (loading) {
+    return (
+      <ProtectedRoute requiredRole="client">
+        <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Scanning Legal Network...</p>
+        </div>
+      </ProtectedRoute>
     );
-  };
-
-  const getLawyerYearsOfExperience = (lawyer: Lawyer) => {
-    return lawyer.lawyer_profile?.yearsOfExperience || 0;
-  };
-
-  const generateRating = (lawyer: Lawyer) => {
-    // Generate a rating based on experience (simplified for now)
-    const years = getLawyerYearsOfExperience(lawyer);
-    const baseRating = 4.0 + (Math.min(years, 15) / 30);
-    return Math.min(baseRating, 4.9);
-  };
-
-  const getRandomReviews = (lawyer: Lawyer) => {
-    // Generate consistent review count based on lawyer ID
-    const seed = lawyer.id.charCodeAt(0);
-    return 50 + (seed % 150);
-  };
+  }
 
   return (
     <ProtectedRoute requiredRole="client">
-      <div className="p-8 bg-gradient-to-b from-slate-50 to-slate-50/50 dark:from-slate-950 dark:to-slate-950/50 min-h-screen">
-        <div className="space-y-6">
-          {/* Header */}
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 dark:text-white">Find Your Lawyer</h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-2">Connect with experienced legal professionals</p>
+      <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/50 p-8 pb-20">
+        <div className="max-w-7xl mx-auto space-y-12">
+
+          {/* Hero Section */}
+          <div className="text-center space-y-6 max-w-3xl mx-auto py-10">
+            <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 font-black text-xs uppercase tracking-[0.2em] animate-in zoom-in-50">
+              <ShieldCheck className="w-4 h-4" />
+              Verified Expert Network
+            </div>
+            <h1 className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.9] italic uppercase">
+              Secure Your <span className="text-blue-600">Counsel.</span>
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 font-medium text-lg leading-relaxed">
+              Connect with top-tier verified legal professionals. Filter by specialty, jurisdiction, and proven track record.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Filters Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-8 space-y-6">
-                {/* Search Bar */}
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                  <CardContent className="pt-6">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                      <Input
-                        placeholder="Search lawyers..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
 
-                {/* Location Filter */}
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2 text-slate-900 dark:text-white">
-                      <MapPin className="w-4 h-4" />
-                      Location
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
+            {/* Filter Sidebar */}
+            <div className="lg:col-span-1 space-y-8">
+
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                <Input
+                  placeholder="Expert name or keyword..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-14 pl-12 pr-4 rounded-[24px] bg-white dark:bg-slate-900 border-none shadow-sm font-bold text-sm"
+                />
+              </div>
+
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[32px] overflow-hidden bg-white">
+                <CardHeader className="pb-3 pt-8 px-8">
+                  <CardTitle className="text-xs font-black uppercase text-slate-400 tracking-widest italic flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5" /> Jurisdiction
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-8 space-y-1">
+                  <button
+                    onClick={() => setSelectedLocation('')}
+                    className={cn(
+                      "w-full text-left px-4 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest",
+                      !selectedLocation ? "bg-blue-600 text-white shadow-lg shadow-blue-500/10" : "text-slate-500 hover:bg-slate-100"
+                    )}
+                  >
+                    All Regions
+                  </button>
+                  {locations.map((loc) => (
                     <button
-                      onClick={() => setSelectedLocation('')}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm ${
-                        !selectedLocation
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
+                      key={loc}
+                      onClick={() => setSelectedLocation(loc)}
+                      className={cn(
+                        "w-full text-left px-4 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest",
+                        selectedLocation === loc ? "bg-blue-600 text-white shadow-lg shadow-blue-500/10" : "text-slate-500 hover:bg-slate-100"
+                      )}
                     >
-                      All Locations
+                      {loc}
                     </button>
-                    {locations.map((location) => (
-                      <button
-                        key={location}
-                        onClick={() => setSelectedLocation(location)}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm ${
-                          selectedLocation === location
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        {location}
-                      </button>
-                    ))}
-                  </CardContent>
-                </Card>
+                  ))}
+                </CardContent>
+              </Card>
 
-                {/* Practice Area Filter */}
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2 text-slate-900 dark:text-white">
-                      <Filter className="w-4 h-4" />
-                      Practice Area
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {practiceAreas.map((area) => (
-                      <label
-                        key={area}
-                        className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedSpecialties.includes(area)}
-                          onChange={() => toggleSpecialty(area)}
-                          className="w-4 h-4 rounded border-slate-300 dark:border-slate-600"
-                        />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{area}</span>
-                      </label>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                {/* Rating Filter */}
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2 text-slate-900 dark:text-white">
-                      <Star className="w-4 h-4" />
-                      Minimum Rating
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {[0, 4, 4.5, 4.7, 4.9].map((rating) => (
-                      <button
-                        key={rating}
-                        onClick={() => setMinRating(rating)}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm ${
-                          minRating === rating
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        {rating === 0 ? 'All Ratings' : `${rating}+ ⭐`}
-                      </button>
-                    ))}
-                  </CardContent>
-                </Card>
+              <div className="p-8 rounded-[40px] bg-slate-900 text-white space-y-6 relative overflow-hidden group shadow-2xl">
+                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                  <Gavel className="w-24 h-24" />
+                </div>
+                <h3 className="text-xl font-black italic tracking-tighter leading-none uppercase">Legal <br /> Matching Engine</h3>
+                <p className="text-slate-500 text-xs font-medium leading-relaxed">Our system analyzes practice history to recommend the best representative for your specific case type.</p>
+                <Button className="w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-[10px] border-none shadow-xl">
+                  Auto-Match Me
+                </Button>
               </div>
+
             </div>
 
-            {/* Results Section */}
-            <div className="lg:col-span-3 space-y-6">
-              {/* Results Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    {loading ? 'Loading...' : `${filteredLawyers.length} Lawyer${filteredLawyers.length !== 1 ? 's' : ''} Found`}
-                  </h2>
-                  <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-                    {selectedLocation && `in ${selectedLocation}`}
-                    {selectedSpecialties.length > 0 && ` • ${selectedSpecialties.join(', ')}`}
-                  </p>
-                </div>
+            {/* Counsel Results */}
+            <div className="lg:col-span-3 space-y-8">
 
-                {/* View Toggle */}
-                <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded transition-colors ${
-                      viewMode === 'grid'
-                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                    title="Grid View"
-                  >
-                    <Grid3x3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 rounded transition-colors ${
-                      viewMode === 'list'
-                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                    title="List View"
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
+              <div className="flex items-center justify-between px-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Inventory identified: <span className="text-slate-900 dark:text-white">{filteredLawyers.length} Verified Counsel</span></p>
+                <div className="flex gap-2">
+                  <Badge className="bg-emerald-500/10 text-emerald-600 font-black text-[9px] uppercase tracking-widest border border-emerald-500/20">Active Indexing</Badge>
                 </div>
               </div>
 
-              {/* Loading State */}
-              {loading ? (
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                  <CardContent className="pt-12 pb-12 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
-                  </CardContent>
-                </Card>
-              ) : /* Lawyers Grid/List */
-              filteredLawyers.length === 0 ? (
-                <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                  <CardContent className="pt-12 pb-12 text-center">
-                    <p className="text-slate-600 dark:text-slate-400 font-medium mb-2">No lawyers found</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-500">Try adjusting your filters</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div
-                  className={
-                    viewMode === 'grid'
-                      ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
-                      : 'space-y-4'
-                  }
-                >
-                  {filteredLawyers.map((lawyer) => {
-                    const rating = generateRating(lawyer);
-                    const reviews = getRandomReviews(lawyer);
-                    const practiceAreasFromProfile = lawyer.lawyer_profile?.practiceAreas || [];
-                    const tagline = lawyer.lawyer_profile?.tagline || '';
-                    const bio = lawyer.lawyer_profile?.bio || '';
-                    const location = lawyer.lawyer_profile?.location || 'Location TBD';
-                    const yearsOfExperience = getLawyerYearsOfExperience(lawyer);
-
-                    return (
-                      <Card
-                        key={lawyer.id}
-                        className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-lg transition-shadow overflow-hidden"
-                      >
-                        <CardContent className="p-6">
-                          {/* Header */}
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex-1">
-                              <h3 className="text-lg font-bold text-slate-900 dark:text-white">{lawyer.full_name}</h3>
-                              <p className="text-sm text-slate-600 dark:text-slate-400">{tagline}</p>
-                            </div>
-                            {lawyer.status === 'active' && (
-                              <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Active
-                              </Badge>
-                            )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredLawyers.map((lawyer) => (
+                  <Card key={lawyer.id} className="border-none shadow-sm dark:bg-slate-900 rounded-[40px] overflow-hidden bg-white group hover:shadow-2xl hover:shadow-blue-500/5 transition-all duration-500">
+                    <CardContent className="p-10 space-y-8">
+                      <div className="flex justify-between items-start">
+                        <div className="w-20 h-20 rounded-[32px] bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-3xl font-black italic text-blue-600 shadow-inner group-hover:scale-110 transition-transform">
+                          {lawyer.full_name.charAt(0)}
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span className="text-sm font-black text-slate-900 dark:text-white italic">4.9</span>
                           </div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Verified Expert</p>
+                        </div>
+                      </div>
 
-                          {/* Location, Rating & Contact */}
-                          <div className="space-y-2 mb-4">
-                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                              <MapPin className="w-4 h-4" />
-                              {location}
-                            </div>
-                            {lawyer.phone && (
-                              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                <Phone className="w-4 h-4" />
-                                {lawyer.phone}
-                              </div>
-                            )}
-                            {lawyer.email && (
-                              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                <Mail className="w-4 h-4" />
-                                {lawyer.email}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`w-4 h-4 ${
-                                      i < Math.floor(rating)
-                                        ? 'fill-amber-400 text-amber-400'
-                                        : 'text-slate-300 dark:text-slate-600'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                              <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                {rating.toFixed(1)}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                ({reviews} reviews)
-                              </span>
-                            </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-black italic tracking-tighter text-slate-900 dark:text-white uppercase leading-none group-hover:text-blue-600 transition-colors">{lawyer.full_name}</h3>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest line-clamp-1">{lawyer.lawyer_profile?.tagline || 'Leading Legal Representative'}</p>
+                      </div>
+
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed italic">
+                        {lawyer.lawyer_profile?.bio || 'Experienced legal counsel specializing in high-stakes litigation and strategic advisory.'}
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {lawyer.lawyer_profile?.practiceAreas?.slice(0, 3).map((area) => (
+                          <Badge key={area} className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-black text-[9px] uppercase tracking-widest border-none px-3 py-1">
+                            {area}
+                          </Badge>
+                        ))}
+                      </div>
+
+                      <div className="pt-8 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Jurisdiction</p>
+                          <div className="flex items-center gap-1.5 text-xs font-black uppercase italic tracking-tighter">
+                            <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                            {lawyer.lawyer_profile?.location || 'General'}
                           </div>
+                        </div>
+                        <Button className="rounded-2xl h-12 px-8 bg-slate-900 dark:bg-slate-800 text-white hover:bg-blue-600 font-black uppercase tracking-widest text-[10px] border-none shadow-xl transition-all group-hover:scale-105">
+                          Connect Counsel <ChevronRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
 
-                          {/* Bio */}
-                          <p className="text-sm text-slate-700 dark:text-slate-300 mb-4 line-clamp-2">
-                            {bio}
-                          </p>
-
-                          {/* Practice Areas */}
-                          <div className="flex flex-wrap gap-2 mb-4">
-                            {practiceAreasFromProfile.slice(0, 3).map((specialty) => (
-                              <Badge
-                                key={specialty}
-                                variant="outline"
-                                className="text-xs border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                              >
-                                {specialty}
-                              </Badge>
-                            ))}
-                          </div>
-
-                          {/* Footer */}
-                          <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-                            <div>
-                              <p className="text-xs text-slate-600 dark:text-slate-400">Experience</p>
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{yearsOfExperience} years</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-600 dark:text-slate-400">License</p>
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{lawyer.bar_number || 'N/A'}</p>
-                            </div>
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 ml-auto">
-                              Contact
-                              <ArrowRight className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
+                {filteredLawyers.length === 0 && (
+                  <div className="col-span-full py-32 text-center space-y-6">
+                    <Sparkles className="w-20 h-20 mx-auto text-slate-100" />
+                    <div className="space-y-2">
+                      <h3 className="text-3xl font-black italic tracking-tighter uppercase leading-none">Zero Index Match</h3>
+                      <p className="text-slate-500 font-bold text-xs uppercase italic tracking-widest">Adjust your search parameters to find available counsel.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+
           </div>
+
         </div>
       </div>
     </ProtectedRoute>

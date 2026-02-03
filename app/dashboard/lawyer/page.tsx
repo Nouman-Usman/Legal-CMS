@@ -8,21 +8,26 @@ import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Loader2, 
-  Plus, 
-  FileText, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Loader2,
+  FileText,
+  CheckCircle2,
   AlertCircle,
   Calendar,
   MessageSquare,
-  TrendingUp,
   ArrowRight,
   MapPin,
-  DollarSign
+  Search,
+  PenTool,
+  Plus,
+  Briefcase,
+  TrendingUp,
+  Clock,
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface Case {
   id: string;
@@ -52,28 +57,16 @@ interface Hearing {
   case: Case;
 }
 
-interface TimeEntry {
-  id: string;
-  case_id: string;
-  minutes: number;
-  billable: boolean;
-  rate: number | null;
-  created_at: string;
-  case: Case;
-}
-
 export default function LawyerDashboard() {
   const router = useRouter();
   const { user } = useAuth();
   const [activeCases, setActiveCases] = useState<Case[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [upcomingHearings, setUpcomingHearings] = useState<Hearing[]>([]);
-  const [recentTimeEntries, setRecentTimeEntries] = useState<TimeEntry[]>([]);
   const [stats, setStats] = useState({
     totalCases: 0,
     activeCases: 0,
     pendingTasks: 0,
-    hoursLogged: 0,
     unreadMessages: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -153,23 +146,6 @@ export default function LawyerDashboard() {
         if (hearingsError) throw hearingsError;
         setUpcomingHearings(hearings || []);
 
-        // Fetch recent time entries (last 7 days)
-        const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-        const { data: timeEntries, error: timeError } = await supabase
-          .from('time_entries')
-          .select(`
-            *,
-            case:cases(*)
-          `)
-          .eq('user_id', user.id)
-          .gte('created_at', sevenDaysAgo.toISOString())
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (timeError) throw timeError;
-        setRecentTimeEntries(timeEntries || []);
-
         // Calculate stats
         const { data: allCases, error: allCasesError } = await supabase
           .from('cases')
@@ -178,13 +154,10 @@ export default function LawyerDashboard() {
           .neq('status', 'archived');
 
         if (!allCasesError) {
-          const totalHours = (timeEntries || []).reduce((sum, entry) => sum + (entry.minutes / 60), 0);
-          
           setStats({
             totalCases: allCases?.length || 0,
             activeCases: cases?.length || 0,
             pendingTasks: tasksData?.length || 0,
-            hoursLogged: Math.round(totalHours * 10) / 10,
             unreadMessages: 0, // TODO: implement when messages are ready
           });
         }
@@ -202,8 +175,9 @@ export default function LawyerDashboard() {
   if (loading) {
     return (
       <ProtectedRoute requiredRole="lawyer">
-        <div className="flex items-center justify-center h-screen">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <p className="text-slate-500 font-medium animate-pulse">Syncing your legal dashboard...</p>
         </div>
       </ProtectedRoute>
     );
@@ -211,336 +185,304 @@ export default function LawyerDashboard() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      case 'high': return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-      case 'low': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'open': return 'text-green-600';
-      case 'pending': return 'text-yellow-600';
-      case 'closed': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  const getTaskStatusBadge = (status: string) => {
-    switch (status) {
-      case 'done': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'in_progress': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-      case 'review': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+      case 'critical': return 'bg-red-500 text-white';
+      case 'high': return 'bg-orange-500 text-white';
+      case 'medium': return 'bg-blue-500 text-white';
+      case 'low': return 'bg-emerald-500 text-white';
+      default: return 'bg-slate-500 text-white';
     }
   };
 
   return (
     <ProtectedRoute requiredRole="lawyer">
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
-          
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
-                Welcome, {user?.full_name?.split(' ')[0] || 'Lawyer'}
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Manage your cases, tasks, and time tracking
-              </p>
+      <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/50 p-8 pb-12">
+        <div className="max-w-7xl mx-auto space-y-10">
+
+          {/* Top Banner section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+            <div className="lg:col-span-2 p-8 rounded-[40px] bg-gradient-to-br from-blue-700 via-indigo-700 to-indigo-900 text-white relative overflow-hidden shadow-2xl shadow-blue-500/20">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+              <div className="relative z-10 space-y-6">
+                <div>
+                  <h1 className="text-5xl font-black tracking-tighter leading-none italic">
+                    Focus Mode <span className="text-blue-200">ON.</span>
+                  </h1>
+                  <p className="text-blue-100/80 font-medium mt-4 text-lg max-w-md">
+                    You have <span className="text-white font-bold">{stats.activeCases} active cases</span> and <span className="text-white font-bold">{upcomingHearings.length} hearings</span> scheduled for this month. Stay sharp, Counsel.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Link href="/dashboard/lawyer/drafting">
+                    <Button className="bg-white text-blue-700 hover:bg-blue-50 font-black rounded-2xl h-12 px-8 border-none shadow-xl transition-all hover:scale-105 uppercase tracking-tight text-xs">
+                      Resume Drafting
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/lawyer/research">
+                    <Button variant="outline" className="bg-white/10 hover:bg-white/20 text-white font-black rounded-2xl h-12 px-8 border-white/20 backdrop-blur-sm uppercase tracking-tight text-xs">
+                      Start Research
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+              <div className="absolute -right-8 -bottom-8 opacity-20 hidden xl:block">
+                <Briefcase className="w-64 h-64 text-white rotate-12" />
+              </div>
             </div>
-            <Button size="lg" className="gap-2">
-              <Plus className="w-4 h-4" />
-              Log Time
-            </Button>
+
+            <div className="space-y-4">
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[32px] overflow-hidden flex-1 group hover:shadow-xl transition-all cursor-pointer">
+                <CardContent className="p-8 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-black uppercase text-slate-400 tracking-widest leading-none">Firm Revenue</p>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white">$12,450</p>
+                    <div className="flex items-center gap-1 text-emerald-500 font-bold text-xs uppercase pt-2">
+                      <TrendingUp className="w-3 h-3" /> +12% this month
+                    </div>
+                  </div>
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[32px] overflow-hidden flex-1 group hover:shadow-xl transition-all cursor-pointer">
+                <CardContent className="p-8 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-black uppercase text-slate-400 tracking-widest leading-none">Pending Tasks</p>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white">{stats.pendingTasks}</p>
+                    <div className="flex items-center gap-1 text-blue-500 font-bold text-xs uppercase pt-2">
+                      <Clock className="w-3 h-3" /> 2 Due Today
+                    </div>
+                  </div>
+                  <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Total Cases
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{stats.totalCases}</span>
-                  <FileText className="w-8 h-8 text-blue-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Active Cases
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold text-green-600">{stats.activeCases}</span>
-                  <CheckCircle2 className="w-8 h-8 text-green-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Pending Tasks
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold text-orange-600">{stats.pendingTasks}</span>
-                  <AlertCircle className="w-8 h-8 text-orange-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Hours Logged
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold text-purple-600">{stats.hoursLogged}</span>
-                  <Clock className="w-8 h-8 text-purple-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Messages
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold text-teal-600">{stats.unreadMessages}</span>
-                  <MessageSquare className="w-8 h-8 text-teal-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
+          {/* Quick Actions Strip */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { name: 'Research Center', icon: Search, color: 'bg-indigo-600', href: '/dashboard/lawyer/research' },
+              { name: 'Doc Lab', icon: PenTool, color: 'bg-indigo-600', href: '/dashboard/lawyer/drafting' },
+              { name: 'Messenger', icon: MessageSquare, color: 'bg-indigo-600', href: '/dashboard/lawyer/messages' },
+              { name: 'Cases Root', icon: Briefcase, color: 'bg-indigo-600', href: '/dashboard/lawyer/cases' },
+            ].map((action) => (
+              <Link key={action.name} href={action.href}>
+                <button className="w-full p-6 rounded-[32px] bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4 transition-all hover:shadow-lg hover:border-indigo-500 group">
+                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg group-hover:scale-110 transition-transform", action.color)}>
+                    <action.icon className="w-6 h-6" />
+                  </div>
+                  <span className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-sm leading-none">{action.name}</span>
+                </button>
+              </Link>
+            ))}
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Left Column - Cases and Tasks */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* Active Cases */}
-              <Card>
-                <CardHeader>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            {/* Left Column - Critical Cases & Tasks */}
+            <div className="lg:col-span-2 space-y-8">
+
+              {/* Active Cases Board */}
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[40px] overflow-hidden">
+                <CardHeader className="p-8 pb-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle>Active Cases</CardTitle>
-                      <CardDescription>Cases assigned to you</CardDescription>
+                      <CardTitle className="text-2xl font-black tracking-tight leading-none uppercase">Current Caseload</CardTitle>
+                      <CardDescription className="text-slate-500 font-medium mt-1 uppercase tracking-widest text-[10px]">Your active legal files</CardDescription>
                     </div>
-                    <Button variant="outline" size="sm">
-                      View All
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    <Link href="/dashboard/lawyer/cases">
+                      <Button variant="ghost" className="rounded-xl font-bold gap-2 text-indigo-600 hover:bg-indigo-50">
+                        Explore All <ArrowRight className="w-4 h-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-8 pt-4">
                   {activeCases.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500">
-                      <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                      <p>No active cases</p>
+                    <div className="text-center py-20 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border-2 border-dashed border-slate-200 dark:border-slate-700">
+                      <Briefcase className="w-16 h-16 mx-auto mb-4 text-slate-200" />
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No active cases found</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {activeCases.map((caseItem) => (
                         <div
                           key={caseItem.id}
-                          className="flex items-start justify-between p-4 rounded-lg border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          className="group p-6 rounded-[32px] bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 hover:border-indigo-400 hover:shadow-xl hover:shadow-indigo-500/5 transition-all cursor-pointer relative overflow-hidden"
+                          onClick={() => router.push(`/dashboard/lawyer/cases/${caseItem.id}`)}
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-1">
-                              <h3 className="font-semibold">{caseItem.title}</h3>
-                              <Badge className={getPriorityColor(caseItem.priority)}>
+                          <div className={`absolute top-0 right-0 w-1.5 h-full ${getPriorityColor(caseItem.priority)}`} />
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-start">
+                              <Badge className={cn("rounded-full px-2 py-0 border-none font-bold text-[9px] uppercase tracking-widest", getPriorityColor(caseItem.priority))}>
                                 {caseItem.priority}
                               </Badge>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{caseItem.case_number}</span>
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                              Case #{caseItem.case_number}
-                            </p>
-                            {caseItem.next_hearing_date && (
-                              <div className="flex items-center gap-1 mt-2 text-sm text-slate-600 dark:text-slate-400">
-                                <Calendar className="w-4 h-4" />
-                                {new Date(caseItem.next_hearing_date).toLocaleDateString()}
+                            <h3 className="font-extrabold text-slate-900 dark:text-white text-lg leading-tight line-clamp-2">{caseItem.title}</h3>
+                            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-slate-500">
+                                <Calendar className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest">
+                                  {caseItem.next_hearing_date ? new Date(caseItem.next_hearing_date).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ExternalLink className="w-3.5 h-3.5 text-indigo-600" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Enhanced Workboard/Tasks */}
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[40px] overflow-hidden">
+                <CardHeader className="p-8 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-black tracking-tight leading-none uppercase">Daily Actions</CardTitle>
+                      <CardDescription className="text-slate-500 font-medium mt-1 uppercase tracking-widest text-[10px]">Your tactical operation list</CardDescription>
+                    </div>
+                    <Button variant="outline" className="rounded-xl font-bold gap-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-10 px-6">
+                      <Plus className="w-4 h-4" /> New Action
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 pt-4">
+                  {tasks.length === 0 ? (
+                    <div className="text-center py-12">
+                      <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Awaiting assignments</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {tasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between p-5 rounded-[24px] bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100/50 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 transition-all group"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={cn("w-2.5 h-2.5 rounded-full",
+                              task.status === 'done' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                            )} />
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
+                              {task.due_date && (
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                  <Clock className="w-3 h-3" /> Due: {new Date(task.due_date).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="rounded-lg px-2 h-6 border-slate-200 dark:border-slate-700 font-black text-[9px] uppercase tracking-widest text-slate-500">
+                              {task.status}
+                            </Badge>
+                            <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full opacity-0 group-hover:opacity-100 transition-all">
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Schedule & CMS Tools */}
+            <div className="space-y-8">
+
+              {/* Hearing Radar */}
+              <Card className="border-none shadow-sm dark:bg-slate-900 rounded-[40px] overflow-hidden">
+                <CardHeader className="p-8 pb-4">
+                  <CardTitle className="text-2xl font-black tracking-tight leading-none uppercase flex items-center gap-3">
+                    <Calendar className="w-6 h-6 text-indigo-600" />
+                    Hearings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 pt-4 space-y-6">
+                  {upcomingHearings.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-sm font-bold text-slate-400 capitalize">Clear courtroom schedule</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {upcomingHearings.map((hearing) => (
+                        <div key={hearing.id} className="p-5 bg-white dark:bg-slate-800 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-indigo-400 transition-all">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-600" />
+                          <h4 className="font-black text-slate-900 dark:text-white text-sm leading-tight line-clamp-1">{hearing.case?.title}</h4>
+                          <div className="flex flex-col gap-2 mt-4">
+                            <div className="flex items-center gap-2 text-slate-500">
+                              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                              <span className="text-[10px] font-black uppercase tracking-widest">{new Date(hearing.hearing_date).toLocaleDateString()}</span>
+                            </div>
+                            {hearing.court_name && (
+                              <div className="flex items-center gap-2 text-slate-500">
+                                <MapPin className="w-3.5 h-3.5 text-red-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest line-clamp-1">{hearing.court_name}</span>
                               </div>
                             )}
                           </div>
-                          <Button variant="ghost" size="sm">
-                            View
+                          <Button variant="ghost" size="sm" className="w-full mt-4 h-8 rounded-xl bg-slate-50 dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest border-none hover:bg-indigo-600 hover:text-white transition-all">
+                            Hearing Brief
                           </Button>
                         </div>
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
-              {/* Pending Tasks */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Pending Tasks</CardTitle>
-                      <CardDescription>Tasks assigned to you</CardDescription>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      View All
-                      <ArrowRight className="w-4 h-4 ml-2" />
+                  <Link href="/dashboard/lawyer/calendar">
+                    <Button className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest text-[10px] mt-4">
+                      Open Full Calendar
                     </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* Research & Drafting Promo Card */}
+              <div className="p-8 rounded-[40px] bg-slate-900 text-white space-y-8 relative overflow-hidden group border border-slate-800 shadow-2xl">
+                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                  <Search className="w-32 h-32" />
+                </div>
+                <div className="relative z-10 space-y-4">
+                  <div className="inline-flex px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase tracking-widest border border-emerald-500/30">
+                    CMS Core Feature
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {tasks.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500">
-                      <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                      <p>No pending tasks</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {tasks.map((task) => (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{task.title}</p>
-                            {task.due_date && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                Due: {new Date(task.due_date).toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
-                          <Badge className={getTaskStatusBadge(task.status)}>
-                            {task.status}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column - Hearings and Time Tracking */}
-            <div className="space-y-6">
-              
-              {/* Upcoming Hearings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Upcoming Hearings
-                  </CardTitle>
-                  <CardDescription>Next 30 days</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {upcomingHearings.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500">
-                      <Calendar className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm">No upcoming hearings</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {upcomingHearings.map((hearing) => (
-                        <div key={hearing.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border-l-4 border-blue-500">
-                          <p className="font-semibold text-sm">{hearing.case?.title}</p>
-                          <div className="flex items-center gap-1 mt-1 text-xs text-slate-600 dark:text-slate-400">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(hearing.hearing_date).toLocaleDateString()}
-                          </div>
-                          {hearing.court_name && (
-                            <div className="flex items-center gap-1 mt-1 text-xs text-slate-600 dark:text-slate-400">
-                              <MapPin className="w-3 h-3" />
-                              {hearing.court_name}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Time Tracking Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
-                    Recent Time Entries
-                  </CardTitle>
-                  <CardDescription>Last 7 days</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {recentTimeEntries.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500">
-                      <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm">No time entries yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {recentTimeEntries.map((entry) => (
-                        <div key={entry.id} className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-xs">
-                          <div className="flex justify-between items-start">
-                            <p className="font-medium">{entry.case?.title}</p>
-                            <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                              {(entry.minutes / 60).toFixed(1)}h
-                            </span>
-                          </div>
-                          <p className="text-slate-500 dark:text-slate-500 mt-1">
-                            {new Date(entry.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Quick Stats */}
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/10 border-blue-200 dark:border-blue-900">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-900 dark:text-blue-400">
-                    <TrendingUp className="w-5 h-5" />
-                    Billable Hours
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                    {stats.hoursLogged}h
-                  </div>
-                  <p className="text-sm text-blue-700 dark:text-blue-500 mt-2">
-                    This week
+                  <h3 className="text-2xl font-black italic tracking-tighter leading-none">Legal Intelligence.</h3>
+                  <p className="text-slate-400 font-medium text-sm leading-relaxed">
+                    Access precedents across all jurisdictions and draft complex petitions in minutes.
                   </p>
-                </CardContent>
-              </Card>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Link href="/dashboard/lawyer/research">
+                      <Button variant="ghost" className="w-full justify-between rounded-xl bg-white/5 hover:bg-white/10 text-white h-11 px-4 font-bold border-none">
+                        Legal Research <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/lawyer/drafting">
+                      <Button variant="ghost" className="w-full justify-between rounded-xl bg-white/5 hover:bg-white/10 text-white h-11 px-4 font-bold border-none">
+                        Template Lab <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
           {error && (
-            <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
-                  <AlertCircle className="w-5 h-5" />
-                  {error}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="fixed bottom-8 right-8 flex items-center gap-3 p-4 rounded-2xl bg-rose-600 text-white shadow-2xl animate-in slide-in-from-bottom-4">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <p className="text-sm font-bold tracking-tight">{error}</p>
+            </div>
           )}
         </div>
       </div>

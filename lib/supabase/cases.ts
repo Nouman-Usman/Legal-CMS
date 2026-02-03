@@ -92,11 +92,12 @@ export async function getCasesByFilter(filter: {
 
     query = query.order('updated_at', { ascending: false });
 
-    if (filter.limit) {
-      query = query.limit(filter.limit);
-    }
-    if (filter.offset) {
-      query = query.offset(filter.offset);
+    if (typeof filter.limit === 'number') {
+      if (typeof filter.offset === 'number') {
+        query = query.range(filter.offset, filter.offset + filter.limit - 1);
+      } else {
+        query = query.limit(filter.limit);
+      }
     }
 
     const { data, error } = await query;
@@ -153,7 +154,6 @@ export async function createTask(
   taskData: {
     case_id: string;
     title: string;
-    description?: string;
     assigned_to: string;
     due_date?: string;
     priority?: string;
@@ -162,10 +162,10 @@ export async function createTask(
 ) {
   try {
     const { data, error } = await supabase
-      .from('tasks')
+      .from('case_tasks')
       .insert({
         ...taskData,
-        status: taskData.status || 'pending',
+        status: taskData.status || 'todo',
         priority: taskData.priority || 'medium',
       })
       .select()
@@ -181,7 +181,7 @@ export async function createTask(
 export async function updateTask(taskId: string, updates: Record<string, any>) {
   try {
     const { data, error } = await supabase
-      .from('tasks')
+      .from('case_tasks')
       .update(updates)
       .eq('id', taskId)
       .select()
@@ -197,8 +197,8 @@ export async function updateTask(taskId: string, updates: Record<string, any>) {
 export async function getTasksByCase(caseId: string) {
   try {
     const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
+      .from('case_tasks')
+      .select('*, assigned_user:assigned_to(full_name)')
       .eq('case_id', caseId)
       .order('due_date', { ascending: true });
 
@@ -218,12 +218,41 @@ export async function createCaseNote(
   }
 ) {
   try {
+    // 1. Find or create a thread for Case Notes
+    let threadId;
+
+    // Check for existing thread
+    const { data: threads } = await supabase
+      .from('message_threads')
+      .select('id')
+      .eq('case_id', caseId)
+      .eq('subject', 'Case Notes')
+      .limit(1);
+
+    if (threads && threads.length > 0) {
+      threadId = threads[0].id;
+    } else {
+      // Create new thread
+      const { data: newThread, error: threadError } = await supabase
+        .from('message_threads')
+        .insert({
+          case_id: caseId,
+          subject: 'Case Notes'
+        })
+        .select()
+        .single();
+
+      if (threadError) throw threadError;
+      threadId = newThread.id;
+    }
+
+    // 2. Insert message
     const { data, error } = await supabase
-      .from('case_notes')
+      .from('messages')
       .insert({
-        case_id: caseId,
-        ...noteData,
-        is_private: noteData.is_private || false,
+        thread_id: threadId,
+        sender_id: noteData.created_by,
+        content: noteData.content
       })
       .select()
       .single();
@@ -237,22 +266,26 @@ export async function createCaseNote(
 
 export async function getCaseNotes(caseId: string, userId?: string) {
   try {
-    let query = supabase
-      .from('case_notes')
-      .select('*')
-      .eq('case_id', caseId);
+    // 1. Get thread ID
+    const { data: thread } = await supabase
+      .from('message_threads')
+      .select('id')
+      .eq('case_id', caseId)
+      .eq('subject', 'Case Notes')
+      .single();
 
-    // If userId is provided, exclude private notes not created by this user
-    if (userId) {
-      query = query.or(`is_private.eq.false,created_by.eq.${userId}`);
-    } else {
-      query = query.eq('is_private', false);
-    }
+    if (!thread) return { notes: [], error: null };
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    // 2. Get messages
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('*, sender:sender_id(full_name)')
+      .eq('thread_id', thread.id)
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return { notes: data, error: null };
+
+    return { notes: messages, error: null };
   } catch (error) {
     return { notes: null, error };
   }

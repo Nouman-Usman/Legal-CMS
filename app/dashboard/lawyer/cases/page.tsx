@@ -5,15 +5,43 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { getCasesByFilter } from '@/lib/supabase/cases';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { CaseDetail } from '@/components/shared/case-detail';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Loader2,
+  Search,
+  Filter,
+  Briefcase,
+  Clock,
+  Scale,
+  ChevronRight,
+  MoreVertical,
+  Plus,
+  LayoutGrid,
+  List as ListIcon,
+  MessageSquare
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import Link from 'next/link';
+
+interface Case {
+  id: string;
+  case_number: string;
+  title: string;
+  status: string;
+  priority: string;
+  next_hearing_date: string | null;
+}
 
 export default function LawyerCasesPage() {
   const { user } = useAuth();
-  const [cases, setCases] = useState([]);
+  const [cases, setCases] = useState<Case[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     const loadCases = async () => {
@@ -23,11 +51,10 @@ export default function LawyerCasesPage() {
         const { cases: data, error } = await getCasesByFilter({
           assigned_to: user.id,
         });
-        
+
         if (error) throw error;
         setCases(data || []);
-        
-        // Auto-select first case
+
         if (data && data.length > 0) {
           setSelectedCaseId(data[0].id);
         }
@@ -41,79 +68,165 @@ export default function LawyerCasesPage() {
     loadCases();
   }, [user]);
 
+  const filteredCases = cases.filter(c =>
+    (activeTab === 'all' || c.status === activeTab) &&
+    (c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.case_number.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'critical': return 'bg-rose-500 text-white';
+      case 'high': return 'bg-orange-500 text-white';
+      case 'medium': return 'bg-blue-500 text-white';
+      case 'low': return 'bg-emerald-500 text-white';
+      default: return 'bg-slate-500 text-white';
+    }
+  };
+
   return (
     <ProtectedRoute requiredRole="lawyer">
-      <div className="p-8 bg-gradient-to-b from-slate-50 to-slate-50/50 dark:from-slate-950 dark:to-slate-950/50 min-h-screen">
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 dark:text-white">My Cases</h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-2">Manage and track all your assigned legal cases</p>
-          </div>
+      <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="flex h-screen overflow-hidden">
 
-          {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="text-center space-y-3">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-600 mx-auto" />
-                <p className="text-slate-600 dark:text-slate-400">Loading your cases...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Cases List */}
-              <div className="lg:col-span-1">
-                <div className="sticky top-8 space-y-3">
-                  <h3 className="font-semibold text-slate-900 dark:text-white text-lg flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm">
-                      {cases.length}
-                    </span>
-                    Your Cases
-                  </h3>
-                  {cases.length === 0 ? (
-                    <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                      <CardContent className="pt-8 text-center text-slate-500 dark:text-slate-400 pb-8">
-                        <p className="font-medium">No cases assigned yet</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="space-y-2">
-                      {cases.map((caseItem: any) => (
-                        <button
-                          key={caseItem.id}
-                          onClick={() => setSelectedCaseId(caseItem.id)}
-                          className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 border ${
-                            selectedCaseId === caseItem.id
-                              ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 shadow-sm'
-                              : 'border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                          }`}
-                        >
-                          <p className="font-semibold text-sm text-slate-900 dark:text-white">{caseItem.title}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Case #{caseItem.case_number}</p>
-                          {caseItem.status && (
-                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 capitalize px-2 py-1 w-fit rounded bg-slate-100 dark:bg-slate-800 mt-2">
-                              {caseItem.status}
-                            </p>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          {/* Main List Sidebar */}
+          <aside className="w-full lg:w-[450px] flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shrink-0">
+            {/* Header */}
+            <div className="p-8 pb-6 border-b border-slate-100 dark:border-slate-800 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none">Case Vault</h1>
+                  <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">Management Cockpit</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="icon" className="rounded-xl border border-slate-100 dark:border-slate-800">
+                    <LayoutGrid className="w-4 h-4 text-slate-400" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Case Details */}
-              <div className="lg:col-span-2">
-                {selectedCaseId ? (
-                  <CaseDetail caseId={selectedCaseId} />
-                ) : (
-                  <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                    <CardContent className="pt-12 text-center text-slate-500 dark:text-slate-400 pb-12">
-                      <p className="text-lg font-medium">Select a case to view details</p>
-                    </CardContent>
-                  </Card>
-                )}
+              {/* Search */}
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                <Input
+                  placeholder="Search file # or title..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-12 pl-12 pr-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-sm shadow-inner"
+                />
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                {['all', 'open', 'pending', 'closed'].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                      activeTab === tab
+                        ? "bg-slate-900 text-white dark:bg-blue-600 shadow-lg"
+                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 scroll-smooth">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Loading Repository...</p>
+                </div>
+              ) : filteredCases.length === 0 ? (
+                <div className="text-center py-20 px-8">
+                  <Briefcase className="w-16 h-16 mx-auto mb-4 text-slate-100" />
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter italic">No legal records match your active filters.</p>
+                </div>
+              ) : (
+                filteredCases.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCaseId(c.id)}
+                    className={cn(
+                      "w-full p-5 rounded-[32px] text-left transition-all relative overflow-hidden group border",
+                      selectedCaseId === c.id
+                        ? "bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-900 shadow-2xl shadow-blue-500/10"
+                        : "bg-slate-50/50 dark:bg-slate-800/20 border-transparent hover:bg-white dark:hover:bg-slate-800/40 hover:border-slate-200 dark:hover:border-slate-700"
+                    )}
+                  >
+                    {selectedCaseId === c.id && <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-600" />}
+
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-start">
+                        <Badge className={cn("rounded-full px-2 py-0 border-none font-bold text-[9px] uppercase tracking-widest", getPriorityColor(c.priority))}>
+                          {c.priority}
+                        </Badge>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{c.case_number}</span>
+                      </div>
+
+                      <h3 className={cn(
+                        "font-black text-lg leading-tight line-clamp-2",
+                        selectedCaseId === c.id ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
+                      )}>{c.title}</h3>
+
+                      <div className="flex items-center gap-4 pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                            {c.next_hearing_date ? new Date(c.next_hearing_date).toLocaleDateString() : 'NO SCHEDULE'}
+                          </span>
+                        </div>
+                        {selectedCaseId === c.id && (
+                          <div className="flex gap-2 ml-auto">
+                            <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Bottom Insight */}
+            <div className="p-6 bg-slate-900 text-white relative overflow-hidden shrink-0">
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Managed Space</p>
+                  <p className="text-2xl font-black italic">{cases.length} <span className="text-slate-500 text-sm not-italic font-bold">Files</span></p>
+                </div>
+                <Button className="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 font-black text-xs uppercase tracking-tight">
+                  Add Manual File
+                </Button>
+              </div>
+            </div>
+          </aside>
+
+          {/* Details Pane */}
+          <main className="flex-1 overflow-y-auto bg-white dark:bg-slate-950 p-10 relative">
+            {selectedCaseId ? (
+              <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-right-4 duration-500">
+                <CaseDetail caseId={selectedCaseId} />
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
+                <div className="w-32 h-32 rounded-[48px] bg-slate-50 dark:bg-slate-900 flex items-center justify-center shadow-inner">
+                  <Scale className="w-16 h-16 text-slate-200" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Review Intelligence</h2>
+                  <p className="text-slate-500 font-medium max-w-sm">Select a case dossier from the left panel to begin deep-dive review and action planning.</p>
+                </div>
+              </div>
+            )}
+          </main>
+
         </div>
       </div>
     </ProtectedRoute>

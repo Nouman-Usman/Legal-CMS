@@ -4,14 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Sidebar } from '@/components/shared/sidebar';
-import { TimerWidget } from '@/components/domain/time/timer-widget';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { loading, userRole } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Load sidebar state from localStorage
@@ -29,20 +27,14 @@ export default function DashboardLayout({
     localStorage.setItem('sidebarCollapsed', JSON.stringify(newState));
   };
 
-  /* 
-   * loading check removed to let ProtectedRoute handle it consistently.
-   * If we double check loading here, we might flash or block incorrectly. 
-   */
-
-  const showTimer = userRole === 'chamber_admin' || userRole === 'lawyer';
-
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen">
+      <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
         <Sidebar isCollapsed={sidebarCollapsed} onToggle={handleToggle} />
-        <main className="flex-1 overflow-auto relative">
-          {children}
-          {showTimer && <TimerWidget />}
+        <main className="flex-1 overflow-y-auto relative scroll-smooth">
+          <div className="min-h-full">
+            {children}
+          </div>
         </main>
       </div>
     </ProtectedRoute>
