@@ -20,7 +20,7 @@ const supabaseAdmin = createClient(
 // DELETE - Remove lawyer from chamber
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         if (!serviceRoleKey) {
@@ -121,7 +121,7 @@ export async function DELETE(
 // PATCH - Update lawyer status
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         if (!serviceRoleKey) {

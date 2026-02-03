@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, Loader2, Check, ArrowRight, Building, Gavel, User } from 'lucide-react';
 import { UserRole } from '@/lib/contexts/auth-context';
+import { cn } from '@/lib/utils';
 
 const roleOptions: Array<{ id: UserRole; label: string; description: string; icon: React.ElementType }> = [
   {
@@ -91,24 +92,24 @@ function SignupContent() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="space-y-2 text-center lg:text-left">
-        <h1 className="text-3xl font-bold tracking-tight">Create an account</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 italic">
+      <div className="space-y-2">
+        <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Create <br /> <span className="text-blue-600 italic">Account.</span></h1>
+        <p className="text-slate-500 font-medium text-sm italic">
           How will you be using Apna Waqeel?
         </p>
       </div>
 
-      <form onSubmit={handleSignUp} className="space-y-6">
+      <form onSubmit={handleSignUp} className="space-y-8">
         {error && (
-          <div className="flex gap-2 items-start p-3 rounded-lg bg-destructive/10 text-destructive text-sm animate-in zoom-in-95">
-            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div className="flex gap-3 items-start p-4 rounded-2xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest border border-rose-100 animate-in zoom-in-95 italic text-left">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <p>{error}</p>
           </div>
         )}
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
             {roleOptions.map((option) => {
               const Icon = option.icon;
               const isSelected = selectedRole === option.id;
@@ -117,46 +118,59 @@ function SignupContent() {
                   key={option.id}
                   type="button"
                   onClick={() => setSelectedRole(option.id)}
-                  className={`relative p-4 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] outline-none ring-offset-2 focus:ring-2 ring-primary/20 ${isSelected
-                      ? 'border-primary bg-primary/5 shadow-md'
-                      : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                    }`}
+                  className={cn(
+                    "relative p-6 rounded-[32px] border transition-all text-left group overflow-hidden italic",
+                    isSelected
+                      ? "bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-500/20"
+                      : "bg-slate-50/50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-blue-500"
+                  )}
                 >
-                  <div className="flex flex-col items-center text-center gap-3">
-                    <div className={`p-3 rounded-full transition-colors ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  <div className="flex items-center gap-5 relative z-10">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
+                      isSelected ? "bg-white/20" : "bg-white dark:bg-slate-800 shadow-sm text-blue-600"
+                    )}>
                       <Icon className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                      <div className="font-semibold text-sm">{option.label}</div>
-                      <div className="text-[11px] leading-tight text-muted-foreground">{option.description}</div>
+                      <div className="font-black uppercase tracking-tighter text-lg leading-none">{option.label}</div>
+                      <div className={cn(
+                        "text-[10px] font-bold uppercase tracking-widest leading-tight",
+                        isSelected ? "text-blue-100" : "text-slate-400"
+                      )}>{option.description}</div>
                     </div>
                     {isSelected && (
-                      <div className="absolute top-2 right-2 text-primary">
-                        <Check className="w-4 h-4" />
+                      <div className="ml-auto">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
                     )}
                   </div>
+                  {isSelected && (
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                      <Icon className="w-20 h-20" />
+                    </div>
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium leading-none">Full Name</label>
+        <div className="space-y-5">
+          <div className="space-y-2 italic">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Full Identity Name</label>
             <Input
               placeholder="John Doe"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               disabled={loading}
               required
-              className="h-11"
+              className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium leading-none">Email</label>
+          <div className="space-y-2 italic text-left">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Legal Professional Email</label>
             <Input
               type="email"
               placeholder="name@example.com"
@@ -164,13 +178,13 @@ function SignupContent() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               required
-              className="h-11"
+              className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none">Password</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 italic text-left">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Password</label>
               <Input
                 type="password"
                 placeholder="••••••••"
@@ -178,12 +192,12 @@ function SignupContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 required
-                className="h-11"
+                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none">Confirm</label>
+            <div className="space-y-2 italic text-left">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Confirm</label>
               <Input
                 type="password"
                 placeholder="••••••••"
@@ -191,7 +205,7 @@ function SignupContent() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading}
                 required
-                className="h-11"
+                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
               />
             </div>
           </div>
@@ -199,29 +213,29 @@ function SignupContent() {
 
         <Button
           type="submit"
-          className="w-full h-11 transition-all"
+          className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-blue-500/20 italic"
           disabled={loading}
         >
           {loading ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating account...
+              <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+              Creating Identity...
             </>
           ) : (
             <>
-              Create Account
-              <ArrowRight className="w-4 h-4 ml-2" />
+              Initialize Account
+              <ArrowRight className="w-5 h-5 ml-3" />
             </>
           )}
         </Button>
 
-        <div className="text-center text-sm text-muted-foreground">
-          Already have an account?{' '}
+        <div className="text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 italic">
+          Already verified?{' '}
           <Link
             href="/auth/login"
-            className="font-semibold text-primary hover:text-primary/80 hover:underline underline-offset-4 transition-colors"
+            className="text-blue-600 hover:text-blue-700 underline underline-offset-4 font-black italic transition-colors"
           >
-            Sign in
+            Sign In
           </Link>
         </div>
       </form>

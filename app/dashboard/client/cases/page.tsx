@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText,
@@ -28,7 +29,8 @@ import {
   MapPin,
   CheckCircle2,
   Lock,
-  Loader2
+  Loader2,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';

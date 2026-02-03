@@ -44,32 +44,32 @@ function LoginContent() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="space-y-2 text-center lg:text-left">
-        <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-        <p className="text-muted-foreground">
-          Enter your credentials to access your workspace.
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 italic">
+      <div className="space-y-2">
+        <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Welcome <br /> <span className="text-blue-600 italic">Back.</span></h1>
+        <p className="text-slate-500 font-medium text-sm italic">
+          Enter credentials to access your legal workspace.
         </p>
       </div>
 
-      <form onSubmit={handleLogin} className="space-y-4">
+      <form onSubmit={handleLogin} className="space-y-6">
         {message && (
-          <div className="p-3 rounded-lg bg-primary/10 text-primary text-sm flex items-center gap-2">
-            <span className="font-medium">Notice:</span> {message}
+          <div className="p-4 rounded-2xl bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest border border-blue-100 flex items-center gap-2 italic">
+            <span className="opacity-50 underline italic">Notice:</span> {message}
           </div>
         )}
 
         {error && (
-          <div className="flex gap-2 items-start p-3 rounded-lg bg-destructive/10 text-destructive text-sm animate-in zoom-in-95">
-            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div className="flex gap-3 items-start p-4 rounded-2xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest border border-rose-100 animate-in zoom-in-95 italic">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <p>{error}</p>
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Email
+        <div className="space-y-5 italic">
+          <div className="space-y-2 italic">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+              Email Address
             </label>
             <Input
               type="email"
@@ -78,20 +78,20 @@ function LoginContent() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               required
-              className="h-11"
+              className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 italic">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Password
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+                Secure Password
               </label>
               <Link
                 href="/auth/forgot-password"
-                className="text-sm text-primary hover:text-primary/80 hover:underline underline-offset-4"
+                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 underline underline-offset-4 italic"
               >
-                Forgot password?
+                Forgot?
               </Link>
             </div>
             <Input
@@ -101,37 +101,37 @@ function LoginContent() {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               required
-              className="h-11"
+              className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
             />
           </div>
         </div>
 
         <Button
           type="submit"
-          className="w-full h-11 transition-all"
+          className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-blue-500/20 italic"
           disabled={loading}
         >
           {loading ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Verifying...
+              <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+              Verifying Access...
             </>
           ) : (
             <>
-              Sign In
-              <ArrowRight className="w-4 h-4 ml-2" />
+              Enter Workspace
+              <ArrowRight className="w-5 h-5 ml-3" />
             </>
           )}
         </Button>
       </form>
 
-      <div className="text-center text-sm text-muted-foreground">
-        Don't have an account?{' '}
+      <div className="text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 italic">
+        New here?{' '}
         <Link
           href="/auth/signup"
-          className="font-semibold text-primary hover:text-primary/80 hover:underline underline-offset-4 transition-colors"
+          className="text-blue-600 hover:text-blue-700 underline underline-offset-4 font-black italic"
         >
-          Create an account
+          Request Access
         </Link>
       </div>
     </div>

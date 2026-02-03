@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Lock, CheckCircle, AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Lock, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 
 export default function UpdatePasswordPage() {
     const router = useRouter();
@@ -26,26 +24,26 @@ export default function UpdatePasswordPage() {
             try {
                 console.log('Setting up auth listener...');
                 console.log('Current hash:', window.location.hash);
-                
+
                 // Check for recovery token in hash
                 const hash = window.location.hash;
                 if (hash && hash.includes('access_token')) {
                     console.log('Found token in hash, attempting to establish session...');
-                    
+
                     // Parse the hash to extract token data
                     const hashParams = new URLSearchParams(hash.substring(1));
                     const accessToken = hashParams.get('access_token');
                     const refreshToken = hashParams.get('refresh_token');
                     const type = hashParams.get('type');
                     const expiresIn = hashParams.get('expires_in');
-                    
+
                     console.log('Token data:', {
                         hasAccessToken: !!accessToken,
                         hasRefreshToken: !!refreshToken,
                         type,
                         expiresIn
                     });
-                    
+
                     if (accessToken && type === 'recovery') {
                         // Try to set the session manually
                         try {
@@ -53,14 +51,14 @@ export default function UpdatePasswordPage() {
                                 access_token: accessToken,
                                 refresh_token: refreshToken || '',
                             });
-                            
+
                             if (error) {
                                 console.error('setSession error:', error);
                                 setError(`Failed to establish session: ${error.message}`);
                                 setSessionReady(false);
                                 return;
                             }
-                            
+
                             if (data.session) {
                                 console.log('Session successfully set from recovery token!');
                                 setSessionReady(true);
@@ -77,7 +75,7 @@ export default function UpdatePasswordPage() {
                         }
                     }
                 }
-                
+
                 // Fallback: check for existing session
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 if (sessionError) {
@@ -86,17 +84,17 @@ export default function UpdatePasswordPage() {
                     setSessionReady(false);
                     return;
                 }
-                
+
                 if (session) {
                     console.log('Session exists');
                     setSessionReady(true);
                     return;
                 }
-                
+
                 // Listen for auth state changes
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
                     console.log('Auth event:', event, '| Session:', !!session);
-                    
+
                     if (session) {
                         console.log('Session established from auth state change');
                         setSessionReady(true);
@@ -109,7 +107,7 @@ export default function UpdatePasswordPage() {
                 });
 
                 unsubscribe = subscription.unsubscribe;
-                
+
                 // If still no session after a moment, show error
                 setTimeout(() => {
                     if (!sessionReady) {
@@ -140,7 +138,7 @@ export default function UpdatePasswordPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (password !== confirmPassword) {
             setError('Passwords do not match');
             return;
@@ -157,7 +155,7 @@ export default function UpdatePasswordPage() {
         try {
             // Verify session is still valid
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            
+
             if (sessionError || !session) {
                 throw new Error('Session lost. Your recovery link may have expired. Please request a new invitation.');
             }
@@ -183,134 +181,115 @@ export default function UpdatePasswordPage() {
         }
     };
 
-    if (success) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-                <Card className="w-full max-w-md shadow-lg border-t-4 border-t-green-500">
-                    <CardHeader>
-                        <div className="flex justify-center mb-4">
-                            <div className="bg-green-100 p-3 rounded-full">
-                                <CheckCircle className="w-8 h-8 text-green-600" />
-                            </div>
-                        </div>
-                        <CardTitle className="text-center font-bold text-2xl">Password Updated</CardTitle>
-                        <CardDescription className="text-center">
-                            Your password has been changed successfully. Redirecting you to the dashboard...
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
-            </div>
-        );
-    }
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 italic">
+        <div className="space-y-2">
+            <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Security <br /> <span className="text-blue-600 italic">Update.</span></h1>
+            <p className="text-slate-500 font-medium text-sm italic">
+                Set a new secure password for your workspace.
+            </p>
+        </div>
 
-    if (!sessionReady) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-                <Card className="w-full max-w-md shadow-lg">
-                    <CardHeader className="space-y-1">
-                        <CardTitle className="text-2xl font-bold text-center">Setting Up Your Password</CardTitle>
-                        <CardDescription className="text-center">
-                            {error ? 'There was an issue...' : 'Please wait while we process your invitation...'}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {error ? (
-                            <div className="space-y-4">
-                                <Alert variant="destructive">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                                <Button 
-                                    onClick={() => router.push('/auth/login')}
-                                    className="w-full"
-                                >
-                                    Go to Login
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="flex justify-center">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+        {success ? (
+            <div className="space-y-8 py-4">
+                <div className="flex justify-center">
+                    <div className="bg-emerald-50 p-4 rounded-3xl border border-emerald-100">
+                        <CheckCircle className="w-12 h-12 text-emerald-600" />
+                    </div>
+                </div>
+                <div className="text-center space-y-4">
+                    <h2 className="text-2xl font-black uppercase tracking-tighter italic">Update Complete</h2>
+                    <p className="text-slate-500 font-medium italic">
+                        Redirecting you to the command center...
+                    </p>
+                </div>
             </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-            <Card className="w-full max-w-md shadow-lg">
-                <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl font-bold text-center">Set Your Password</CardTitle>
-                    <CardDescription className="text-center">
-                        Create a secure password for your account
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && (
-                            <Alert variant="destructive">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                        )}
-                        <div className="space-y-2">
-                            <label htmlFor="password" className="text-sm font-medium leading-none">
-                                Password
-                            </label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="pl-9"
-                                    placeholder="••••••••"
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="confirmPassword" className="text-sm font-medium leading-none">
-                                Confirm Password
-                            </label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="pl-9"
-                                    placeholder="••••••••"
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
+        ) : !sessionReady ? (
+            <div className="space-y-8 py-12 flex flex-col items-center">
+                {error ? (
+                    <div className="space-y-6 w-full italic">
+                        <div className="flex gap-3 items-start p-4 rounded-2xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest border border-rose-100 italic">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <p>{error}</p>
                         </div>
                         <Button
-                            type="submit"
-                            className="w-full gap-2"
-                            disabled={loading}
+                            onClick={() => router.push('/auth/login')}
+                            className="w-full h-14 bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl italic"
                         >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Updating...
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle className="w-4 h-4" />
-                                    Continue
-                                </>
-                            )}
+                            Return to Login
                         </Button>
-                    </form>
-                </CardContent>
-            </Card>
-        </div>
-    );
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center gap-4 italic">
+                        <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verifying Identity...</p>
+                    </div>
+                )}
+            </div>
+        ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {error && (
+                    <div className="flex gap-3 items-start p-4 rounded-2xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest border border-rose-100 italic">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <p>{error}</p>
+                    </div>
+                )}
+
+                <div className="space-y-5 italic">
+                    <div className="space-y-2 italic text-left">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+                            New Secure Password
+                        </label>
+                        <div className="relative italic">
+                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                type="password"
+                                placeholder="••••••••"
+                                className="pl-12 h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 italic text-left">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+                            Confirm New Password
+                        </label>
+                        <div className="relative italic">
+                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                type="password"
+                                placeholder="••••••••"
+                                className="pl-12 h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                disabled={loading}
+                                required
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <Button
+                    type="submit"
+                    className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-blue-500/20 italic"
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <>
+                            <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                            Securing...
+                        </>
+                    ) : (
+                        <>
+                            Complete Vault Update
+                            <CheckCircle className="w-5 h-5 ml-3" />
+                        </>
+                    )}
+                </Button>
+            </form>
+        )}
+    </div>
 }

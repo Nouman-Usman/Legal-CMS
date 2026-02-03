@@ -30,8 +30,8 @@ export function CaseForm({ clientId, onSuccess }: CaseFormProps) {
     hearing_date: '',
     expected_closure_date: '',
   });
-  const [clients, setClients] = useState([]);
-  const [lawyers, setLawyers] = useState([]);
+  const [clients, setClients] = useState<any[]>([]);
+  const [lawyers, setLawyers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -71,7 +71,7 @@ export function CaseForm({ clientId, onSuccess }: CaseFormProps) {
     try {
       const { case: newCase, error } = await createCase(formData);
       if (error) throw error;
-      
+
       onSuccess?.();
       // Reset form
       setFormData({
@@ -87,7 +87,7 @@ export function CaseForm({ clientId, onSuccess }: CaseFormProps) {
         hearing_date: '',
         expected_closure_date: '',
       });
-    } catch (err) {
+    } catch (err: any) {
       setError(err.message || 'Failed to create case');
       console.error(err);
     } finally {
