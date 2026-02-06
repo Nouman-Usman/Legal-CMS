@@ -238,7 +238,7 @@ export async function getUserConversations(userId: string) {
     // 3. Fetch user profiles for these participants
     const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, full_name, role, avatar_url, chamber_id')
+      .select('id, full_name, role, avatar_url')
       .in('id', allParticipantIds);
 
     if (usersError) throw usersError;
@@ -258,6 +258,60 @@ export async function getUserConversations(userId: string) {
     return { conversations, error: null };
   } catch (error) {
     console.error('getUserConversations error:', error);
+    return { conversations: null, error };
+  }
+}
+
+export async function getChamberConversations(adminId: string) {
+  try {
+    // 1. Get ALL threads visible to this user (RLS handles the filtering for chamber admins)
+    const { data: threads, error: threadsError } = await supabase
+      .from('message_threads')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (threadsError) throw threadsError;
+
+    if (!threads || threads.length === 0) return { conversations: [], error: null };
+
+    // 2. Get unique participant IDs
+    const allParticipantIds = Array.from(
+      new Set(threads.flatMap((t: any) => t.participant_ids))
+    );
+
+    // 3. Fetch user profiles for these participants
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, full_name, role, avatar_url')
+      .in('id', allParticipantIds);
+
+    if (usersError) throw usersError;
+
+    // 4. Map threads to a richer format
+    // For admin view, "otherUser" is ambiguous as they are overseeing other people's chats.
+    // We should probably expose BOTH participants clearly.
+    // But for compatibility with the UI (which expects otherUser), we might pick one?
+    // Or we provide 'participants' fully and UI handles it.
+
+    const conversations = threads.map((thread: any) => {
+      // For oversight, we might want to label the conversation "Client X & Lawyer Y"
+      // Let's attach all participants.
+      const participants = users?.filter(u => thread.participant_ids.includes(u.id)) || [];
+
+      // We can mock 'otherUser' as the first participant for basic UI list compatibility
+      // But the UI should probably be smarter.
+      const otherUser = participants[0];
+
+      return {
+        ...thread,
+        otherUser, // Legacy/prop calc
+        participants
+      };
+    });
+
+    return { conversations, error: null };
+  } catch (error) {
+    console.error('getChamberConversations error:', error);
     return { conversations: null, error };
   }
 }

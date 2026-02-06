@@ -97,65 +97,91 @@ export default function CasesPage() {
   };
 
   // Fetch cases
+  // Fetch cases function
+  const fetchCases = async () => {
+    if (!user?.chamber_id) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('chamber_id', user.chamber_id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Enrich with client and lawyer names in parallel for performance
+      const enrichedCases = await Promise.all(
+        (data || []).map(async (caseItem: any) => {
+          let clientName = '';
+          let lawyerName = '';
+
+          if (caseItem.client_id) {
+            const { data: clientData } = await supabase
+              .from('users')
+              .select('full_name')
+              .eq('id', caseItem.client_id)
+              .single();
+            clientName = clientData?.full_name || 'Unknown';
+          }
+
+          if (caseItem.assigned_to) {
+            const { data: lawyerData } = await supabase
+              .from('users')
+              .select('full_name')
+              .eq('id', caseItem.assigned_to)
+              .single();
+            lawyerName = lawyerData?.full_name || 'Unassigned';
+          }
+
+          return {
+            ...caseItem,
+            client_name: clientName,
+            lawyer_name: lawyerName || 'Unassigned',
+          };
+        })
+      );
+
+      setCases(enrichedCases);
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchCases = async () => {
-      if (!user?.chamber_id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('cases')
-          .select('*')
-          .eq('chamber_id', user.chamber_id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        // Enrich with client and lawyer names in parallel for performance
-        const enrichedCases = await Promise.all(
-          (data || []).map(async (caseItem: any) => {
-            let clientName = '';
-            let lawyerName = '';
-
-            if (caseItem.client_id) {
-              const { data: clientData } = await supabase
-                .from('users')
-                .select('full_name')
-                .eq('id', caseItem.client_id)
-                .single();
-              clientName = clientData?.full_name || 'Unknown';
-            }
-
-            if (caseItem.assigned_to) {
-              const { data: lawyerData } = await supabase
-                .from('users')
-                .select('full_name')
-                .eq('id', caseItem.assigned_to)
-                .single();
-              lawyerName = lawyerData?.full_name || 'Unassigned';
-            }
-
-            return {
-              ...caseItem,
-              client_name: clientName,
-              lawyer_name: lawyerName || 'Unassigned',
-            };
-          })
-        );
-
-        setCases(enrichedCases);
-      } catch (error) {
-        console.error('Error fetching cases:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCases();
+  }, [user?.chamber_id]);
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!user?.chamber_id) return;
+
+    const channel = supabase
+      .channel(`cases_updates_${user.chamber_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cases',
+          filter: `chamber_id=eq.${user.chamber_id}`
+        },
+        () => {
+          fetchCases();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user?.chamber_id]);
 
   // Filter cases

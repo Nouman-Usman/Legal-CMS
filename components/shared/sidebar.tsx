@@ -73,6 +73,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                     label: 'Growth',
                     items: [
                         { name: 'Leads Pipeline', href: '/dashboard/chambers-admin/leads', icon: Zap },
+                        { name: 'Message Oversight', href: '/dashboard/chambers-admin/messages', icon: MessageSquare },
                     ]
                 },
                 {
@@ -80,6 +81,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                     items: [
                         { name: 'Calendar', href: '/dashboard/chambers-admin/calendar', icon: Calendar },
                         { name: 'Settings', href: '/dashboard/chambers-admin/settings', icon: Settings },
+                    ]
+                },
+                {
+                    label: 'Compliance',
+                    items: [
+                        { name: 'Audit Logs', href: '/dashboard/chambers-admin/audit-logs', icon: ShieldCheck },
                     ]
                 }
             ];

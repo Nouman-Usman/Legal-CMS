@@ -81,21 +81,22 @@ export default function ChambersAdminDashboard() {
     const fetchDashboardData = async () => {
       try {
         if (authLoading) return;
-        if (!user?.chamber_id) {
+        const hasChamber = user?.chambers && user.chambers.length > 0;
+        if (!hasChamber) {
           setLoading(false);
           return;
         }
 
-        const chamberId = user.chamber_id;
+        const chamberId = user.chambers![0].chamber_id;
 
         // 1. Fetch Basic Counts & All Cases for analytical processing
         const [lawyersRes, casesCountRes, allCasesRes] = await Promise.all([
           supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true })
+            .from('chamber_members')
+            .select('*, users!inner(role)', { count: 'exact', head: true })
             .eq('chamber_id', chamberId)
-            .eq('role', 'lawyer')
-            .is('deleted_at', null),
+            .eq('users.role', 'lawyer')
+            .eq('is_active', true),
           supabase
             .from('cases')
             .select('*', { count: 'exact', head: true })
@@ -194,6 +195,35 @@ export default function ChambersAdminDashboard() {
         <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
           <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Loading Dashboard...</p>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  // Fallback: If redirect logic fails, prompt user to set up manually
+  if (user?.role === 'chamber_admin' && (!user.chambers || user.chambers.length === 0)) {
+    return (
+      <ProtectedRoute requiredRole="chamber_admin">
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-8">
+          <div className="max-w-md w-full bg-white rounded-[40px] p-10 text-center shadow-xl border border-slate-100 space-y-8 animate-in zoom-in-95 duration-500">
+            <div className="w-20 h-20 -mt-20 mx-auto bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/40">
+              <Building2 className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-4">
+              <h1 className="text-3xl font-black italic tracking-tighter uppercase leading-none">Firm Setup <br /> Required</h1>
+              <p className="text-slate-500 font-medium">
+                Your account is active but no Chamber is associated with it. Please complete the onboarding to access your dashboard.
+              </p>
+            </div>
+
+            <Button
+              onClick={() => router.push('/dashboard/chambers-admin/setup')}
+              className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20"
+            >
+              Complete Setup <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </div>
         </div>
       </ProtectedRoute>
     );

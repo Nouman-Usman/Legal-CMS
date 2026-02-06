@@ -9,7 +9,24 @@ export type UserRole = 'chamber_admin' | 'lawyer' | 'client';
 export interface UserProfile extends User {
   role: UserRole;
   full_name: string;
-  chamber_id?: string;
+  lawyerProfile?: {
+    id: string;
+    bar_number?: string;
+    specialization?: string;
+    bio?: string;
+    experience_years?: number;
+  };
+  clientProfile?: {
+    id: string;
+    company_name?: string;
+    contact_person?: string;
+  };
+  chambers?: Array<{
+    id: string;
+    chamber_id: string;
+    role: string;
+    is_active: boolean;
+  }>;
 }
 
 interface AuthContextType {
@@ -26,13 +43,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Helper to fetch or create profile
+  // Helper to fetch or create profile via server-side API (bypasses RLS)
   const getProfileWithRetry = async (currentUser: User) => {
     try {
       console.log('Fetching profile for:', currentUser.id);
 
-      // 1. Attempt to fetch existing profile regarding deleted status
-      // We want to see our own profile even if soft deleted
+      // Use server-side API route which uses service_role key (bypasses RLS)
+      const fetchRes = await fetch('/api/profile', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (fetchRes.ok) {
+        const data = await fetchRes.json();
+        if (data.exists && data.profile) {
+          console.log('Profile found via API:', data.profile.email);
+          return data.profile;
+        }
+      } else {
+        console.error('Profile API fetch failed:', fetchRes.status, await fetchRes.text().catch(() => ''));
+      }
+
+      // Profile doesn't exist - create it via server API
+      console.log('Profile missing. Creating profile via API...');
+
+      const validRoles: UserRole[] = ['chamber_admin', 'lawyer', 'client'];
+      const metadataRole = currentUser.user_metadata?.role;
+      const role: UserRole = validRoles.includes(metadataRole) ? metadataRole : 'client';
+
+      const createRes = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          full_name: currentUser.user_metadata?.full_name || '',
+          role: role,
+        }),
+      });
+
+      if (createRes.ok) {
+        const createData = await createRes.json();
+        if (createData.profile) {
+          console.log('Profile created successfully via API:', createData.profile.email);
+          return createData.profile;
+        }
+      } else {
+        console.error('Profile API create failed:', createRes.status, await createRes.text().catch(() => ''));
+      }
+
+      // Final fallback: try direct Supabase client (in case API route has issues)
+      console.log('API route failed, trying direct Supabase client...');
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
@@ -40,48 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching user profile:', error);
+        console.error('Direct fetch also failed:', error.message, error.code);
       }
 
-      // 2. If profile exists, return it
       if (profile) {
-        console.log('Profile found:', profile.email);
         return profile;
       }
 
-      // 3. Profile doesn't exist - create it
-      console.log('Profile missing. Creating profile...');
-
-      const validRoles: UserRole[] = ['chamber_admin', 'lawyer', 'client'];
-      const metadataRole = currentUser.user_metadata?.role;
-      const role: UserRole = validRoles.includes(metadataRole) ? metadataRole : 'client';
-
-      // Use upsert to create or update profile
-      const { data: upsertedProfile, error: upsertError } = await supabase
-        .from('users')
-        .upsert({
-          id: currentUser.id,
-          email: currentUser.email!,
-          full_name: currentUser.user_metadata?.full_name || '',
-          role: role
-        }, {
-          onConflict: 'id'
-        })
-        .select()
-        .maybeSingle();
-
-      if (upsertError) {
-        console.error("Failed to upsert profile:", {
-          message: upsertError.message,
-          code: upsertError.code,
-          details: upsertError.details,
-          hint: upsertError.hint
-        });
-        return null;
-      }
-
-      console.log('Profile created successfully:', upsertedProfile?.email);
-      return upsertedProfile;
+      return null;
     } catch (err) {
       console.error('Unexpected error in getProfileWithRetry:', err);
       return null;
@@ -105,25 +132,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 1. Check for recovery token in hash (from email invitation links)
         const hash = typeof window !== 'undefined' ? window.location.hash : '';
         console.log('Hash on init:', hash ? `present (${hash.length} chars)` : 'empty');
-        
+
         if (hash && hash.includes('access_token')) {
           console.log('Processing recovery token from hash...');
-          
+
           const hashParams = new URLSearchParams(hash.substring(1));
           const accessToken = hashParams.get('access_token');
           const refreshToken = hashParams.get('refresh_token');
           const type = hashParams.get('type');
-          
+
           console.log('Token type:', type);
-          
-          if (accessToken && type === 'recovery') {
+
+          if (accessToken && (type === 'recovery' || type === 'magiclink')) {
             try {
               console.log('Calling setSession with recovery token...');
               const { data, error: setSessionError } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken || '',
               });
-              
+
               if (setSessionError) {
                 console.error('setSession error:', setSessionError);
               } else if (data.session) {
@@ -139,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-        
+
         // 2. Check session immediately
         const { data: { session }, error } = await supabase.auth.getSession();
         console.log('Initial getSession result:', session?.user?.id, error);

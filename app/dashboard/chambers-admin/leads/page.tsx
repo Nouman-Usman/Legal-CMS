@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { getLeads, updateLeadStatus, deleteLead, type Lead } from '@/lib/supabase/leads';
+import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,7 +50,14 @@ export default function LeadsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
 
     const fetchLeads = async () => {
-        if (!user?.chamber_id) return;
+        if (!user) return;
+
+        if (!user.chamber_id) {
+            console.warn('User has no chamber_id, cannot fetch leads');
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         const { leads: data, error } = await getLeads(user.chamber_id);
         if (!error && data) {
@@ -61,6 +69,34 @@ export default function LeadsPage() {
     useEffect(() => {
         fetchLeads();
     }, [user]);
+
+    // Realtime subscription for leads updates
+    useEffect(() => {
+        if (!user?.chamber_id) return;
+
+        console.log('Setting up realtime subscription for leads');
+        const channel = supabase
+            .channel(`leads_updates_${user.chamber_id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'leads',
+                    filter: `chamber_id=eq.${user.chamber_id}`
+                },
+                (payload) => {
+                    console.log('Realtime lead update received:', payload);
+                    fetchLeads();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            console.log('Cleaning up realtime subscription for leads');
+            supabase.removeChannel(channel);
+        };
+    }, [user?.chamber_id]);
 
     const handleStatusUpdate = async (id: string, status: Lead['status']) => {
         setLeads(leads.map(l => l.id === id ? { ...l, status } : l));

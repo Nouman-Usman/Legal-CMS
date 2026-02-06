@@ -542,24 +542,26 @@ model chamber_settings {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model chambers {
-  id                               String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name                             String
-  description                      String?
-  address                          String?
-  phone                            String?
-  email                            String?
-  website                          String?
-  logo_url                         String?
-  admin_id                         String?           @db.Uuid
-  created_at                       DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  updated_at                       DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  deleted_at                       DateTime?         @db.Timestamptz(6)
-  cases                            cases[]
-  chamber_settings                 chamber_settings?
-  users_chambers_admin_idTousers   public_users?     @relation("chambers_admin_idTousers", fields: [admin_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chamber_admin")
-  invoices                         invoices[]
-  leads                            leads[]
-  users_users_chamber_idTochambers public_users[]    @relation("users_chamber_idTochambers")
+  id                                String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                              String
+  description                       String?
+  phone                             String?
+  email                             String?
+  website                           String?
+  logo_url                          String?
+  admin_id                          String?           @db.Uuid
+  address_id                        String?           @db.Uuid
+  created_at                        DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                        DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  deleted_at                        DateTime?         @db.Timestamptz(6)
+  cases                             cases[]
+  chamber_settings                  chamber_settings?
+  users_chambers_admin_idTousers    public_users?     @relation("chambers_admin_idTousers", fields: [admin_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chamber_admin")
+  address                           addresses?        @relation(fields: [address_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  invoices                          invoices[]
+  leads                             leads[]
+  members                           chamber_members[]
+  registration_verification        chamber_registration_verifications?
 
   @@schema("public")
 }
@@ -757,41 +759,341 @@ model time_entries {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model public_users {
-  id                                  String            @id @db.Uuid
-  email                               String
-  full_name                           String?
-  role                                String
-  chamber_id                          String?           @db.Uuid
-  phone                               String?
-  avatar_url                          String?
-  specialization                      String?
-  bar_number                          String?
-  status                              String?           @default("active")
-  created_at                          DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  updated_at                          DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
-  deleted_at                          DateTime?         @db.Timestamptz(6)
-  onboarding_completed                Boolean?          @default(false)
-  lawyer_profile                      Json?
-  ai_actions                          ai_actions[]
-  audit_logs                          audit_logs[]
-  case_clients                        case_clients[]
-  case_documents                      case_documents[]
-  case_tasks                          case_tasks[]
-  cases_cases_assigned_toTousers      cases[]           @relation("cases_assigned_toTousers")
-  cases_cases_client_idTousers        cases[]           @relation("cases_client_idTousers")
-  chambers_chambers_admin_idTousers   chambers[]        @relation("chambers_admin_idTousers")
-  invoices                            invoices[]
-  leads                               leads[]
-  message_threads                     message_threads[]
-  messages                            messages[]
-  notifications                       notifications[]
-  thread_reads                        thread_reads[]
-  time_entries                        time_entries[]
-  chambers_users_chamber_idTochambers chambers?         @relation("users_chamber_idTochambers", fields: [chamber_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users                               auth_users        @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                                    String            @id @db.Uuid
+  email                                 String
+  full_name                             String?
+  role                                  String
+  phone                                 String?
+  avatar_url                            String?
+  created_at                            DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                            DateTime          @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  deleted_at                            DateTime?         @db.Timestamptz(6)
+  onboarding_completed                  Boolean?          @default(false)
+  ai_actions                            ai_actions[]
+  audit_logs                            audit_logs[]
+  case_clients                          case_clients[]
+  case_documents                        case_documents[]
+  case_tasks                            case_tasks[]
+  cases_cases_assigned_toTousers        cases[]           @relation("cases_assigned_toTousers")
+  cases_cases_client_idTousers          cases[]           @relation("cases_client_idTousers")
+  chambers_chambers_admin_idTousers     chambers[]        @relation("chambers_admin_idTousers")
+  invoices                              invoices[]
+  leads                                 leads[]
+  message_threads                       message_threads[]
+  messages                              messages[]
+  notifications                         notifications[]
+  thread_reads                          thread_reads[]
+  time_entries                          time_entries[]
+  // Relationships to specialized tables
+  lawyer_profile                        lawyers?
+  client_profile                        clients?
+  chamber_memberships                   chamber_members[]
+  // Verification relationships
+  identity_verification                 user_identity_verifications? @relation("user_identity_verifications_user_id")
+  identity_verifications_verified_by    user_identity_verifications[] @relation("user_identity_verifications_verified_by")
+  lawyer_license_verifications_verified_by lawyer_license_verifications[] @relation("lawyer_license_verifications_verified_by")
+  client_kyc_verifications_verified_by  client_kyc_verifications[] @relation("client_kyc_verifications_verified_by")
+  chamber_reg_verifications_verified_by chamber_registration_verifications[] @relation("chamber_registration_verifications_verified_by")
+  verification_audit_logs               verification_audit_logs[]
+  audit_trail_logs                      audit_trail_logs[]
+  onboarding_progress                   onboarding_progress?
+  onboarding_steps_completed            onboarding_steps_completed[]
+  users                                 auth_users        @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([chamber_id], map: "idx_users_chamber")
   @@map("users")
+  @@schema("public")
+}
+
+/// Lawyers table - stores lawyer-specific information in 3NF
+model lawyers {
+  id                        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id                   String   @unique @db.Uuid
+  bar_number                String?  @unique
+  specialization            String?
+  bio                       String?
+  experience_years          Int?     @default(0)
+  license_verification_status String? @default("pending")
+  verified_at               DateTime? @db.Timestamptz(6)
+  created_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  deleted_at                DateTime? @db.Timestamptz(6)
+  users                     public_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  license_verification      lawyer_license_verifications?
+
+  @@index([bar_number])
+  @@index([specialization])
+  @@index([license_verification_status])
+  @@map("lawyers")
+  @@schema("public")
+}
+
+/// Clients table - stores client-specific information in 3NF
+model clients {
+  id                           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id                      String   @unique @db.Uuid
+  company_name                 String?
+  company_registration_number  String?
+  contact_person              String?
+  address_id                  String?  @db.Uuid
+  gstn                        String?
+  created_at                  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  deleted_at                  DateTime? @db.Timestamptz(6)
+  users                       public_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  address                     addresses? @relation(fields: [address_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  kyc_verification            client_kyc_verifications?
+
+  @@index([company_name])
+  @@map("clients")
+  @@schema("public")
+}
+
+/// Chamber Members junction table - maintains many-to-many relationship between users and chambers
+model chamber_members {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  chamber_id   String   @db.Uuid
+  user_id      String   @db.Uuid
+  role         String   @default("member")
+  joined_at    DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at   DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  chambers     chambers @relation(fields: [chamber_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users        public_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([chamber_id, user_id])
+  @@index([chamber_id])
+  @@index([user_id])
+  @@index([chamber_id, role])
+  @@map("chamber_members")
+  @@schema("public")
+}
+
+/// Address table - BCNF compliance: separated to eliminate partial dependencies
+model addresses {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  country         String
+  state_province  String?
+  city            String
+  postal_code     String?
+  street_address  String
+  address_line2   String?
+  created_at      DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at      DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  chambers        chambers[]
+  clients         clients[]
+
+  @@index([country, city])
+  @@index([postal_code])
+  @@map("addresses")
+  @@schema("public")
+}
+
+/// User Identity Verification - BCNF: Separates identity verification from user account
+model user_identity_verifications {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id               String   @unique @db.Uuid
+  document_type         String
+  document_number       String   @unique
+  document_url          String?
+  verification_status   String   @default("pending")
+  verified_by           String?  @db.Uuid
+  verified_at           DateTime? @db.Timestamptz(6)
+  rejection_reason      String?
+  expiry_date           DateTime? @db.Date
+  created_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  users_user_id         public_users @relation("user_identity_verifications_user_id", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_verified_by     public_users? @relation("user_identity_verifications_verified_by", fields: [verified_by], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@index([verification_status])
+  @@index([document_type])
+  @@map("user_identity_verifications")
+  @@schema("public")
+}
+
+/// Lawyer License Verification - BCNF: Separates license verification from lawyer profile
+model lawyer_license_verifications {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  lawyer_id             String   @unique @db.Uuid
+  bar_association       String
+  license_number        String   @unique
+  license_url           String?
+  verification_status   String   @default("pending")
+  verified_by           String?  @db.Uuid
+  verified_at           DateTime? @db.Timestamptz(6)
+  rejection_reason      String?
+  suspension_reason     String?
+  suspension_date       DateTime? @db.Date
+  license_issue_date    DateTime @db.Date
+  license_expiry_date   DateTime @db.Date
+  created_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  lawyers               lawyers @relation(fields: [lawyer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_verified_by     public_users? @relation("lawyer_license_verifications_verified_by", fields: [verified_by], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([lawyer_id])
+  @@index([verification_status])
+  @@index([bar_association])
+  @@map("lawyer_license_verifications")
+  @@schema("public")
+}
+
+/// Client KYC Verification - BCNF: Separates KYC verification from client profile
+model client_kyc_verifications {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  client_id             String   @unique @db.Uuid
+  verification_type     String
+  document_type         String
+  document_number       String   @unique
+  document_url          String?
+  verification_status   String   @default("pending")
+  verified_by           String?  @db.Uuid
+  verified_at           DateTime? @db.Timestamptz(6)
+  rejection_reason      String?
+  tax_id                String?  @unique
+  created_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  clients               clients @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_verified_by     public_users? @relation("client_kyc_verifications_verified_by", fields: [verified_by], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([client_id])
+  @@index([verification_status])
+  @@index([verification_type])
+  @@map("client_kyc_verifications")
+  @@schema("public")
+}
+
+/// Chamber Registration Verification - BCNF: Separates registration verification from chamber
+model chamber_registration_verifications {
+  id                        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  chamber_id                String   @unique @db.Uuid
+  registration_number       String   @unique
+  registration_certificate_url String?
+  verification_status       String   @default("pending")
+  verified_by               String?  @db.Uuid
+  verified_at               DateTime? @db.Timestamptz(6)
+  rejection_reason          String?
+  suspension_reason         String?
+  suspension_date           DateTime? @db.Date
+  registration_date         DateTime @db.Date
+  registration_expiry_date  DateTime? @db.Date
+  chamber_type              String?
+  created_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  chambers                  chambers @relation(fields: [chamber_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_verified_by         public_users? @relation("chamber_registration_verifications_verified_by", fields: [verified_by], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([chamber_id])
+  @@index([verification_status])
+  @@map("chamber_registration_verifications")
+  @@schema("public")
+}
+
+/// Verification Audit Log - Enterprise audit trail for compliance
+model verification_audit_logs {
+  id                  String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  verification_id     String   @db.Uuid
+  verification_type   String
+  previous_status     String?
+  new_status          String
+  changed_by          String   @db.Uuid
+  change_reason       String?
+  ip_address          String?
+  user_agent          String?
+  created_at          DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  users               public_users @relation(fields: [changed_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([verification_id])
+  @@index([verification_type])
+  @@index([changed_by])
+  @@map("verification_audit_logs")
+  @@schema("public")
+}
+
+/// Audit Trail Logs - Comprehensive activity logging for enterprise compliance
+model audit_trail_logs {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id         String?  @db.Uuid
+  action          String
+  entity_type     String
+  entity_id       String?  @db.Uuid
+  changes         Json?
+  previous_values Json?
+  ip_address      String?
+  user_agent      String?
+  status          String   @default("success")
+  error_message   String?
+  created_at      DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  users           public_users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@index([entity_type, entity_id])
+  @@index([action])
+  @@index([created_at(sort: Desc)])
+  @@map("audit_trail_logs")
+  @@schema("public")
+}
+
+/// Onboarding Steps Definition - Role-specific onboarding workflow
+model onboarding_steps {
+  id                        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  step_key                  String   @unique
+  role                      String
+  step_number               Int
+  step_name                 String
+  description               String?
+  is_required               Boolean  @default(true)
+  created_at                DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  onboarding_completed      onboarding_steps_completed[]
+
+  @@unique([role, step_number])
+  @@index([role, step_number])
+  @@map("onboarding_steps")
+  @@schema("public")
+}
+
+/// Onboarding Progress - Tracks individual user onboarding journey
+model onboarding_progress {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id               String   @unique @db.Uuid
+  role                  String
+  current_step          Int      @default(1)
+  total_steps           Int
+  completed_percentage  Int      @default(0)
+  started_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  completed_at          DateTime? @db.Timestamptz(6)
+  is_completed          Boolean  @default(false)
+  created_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at            DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  users                 public_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@index([role])
+  @@index([is_completed])
+  @@index([completed_at])
+  @@map("onboarding_progress")
+  @@schema("public")
+}
+
+/// Onboarding Steps Completed - Tracks which steps user has completed
+model onboarding_steps_completed {
+  id                  String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id             String   @db.Uuid
+  step_id             String   @db.Uuid
+  step_key            String
+  completed_at        DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  completed_by_action String?
+  metadata            Json?
+  users               public_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  onboarding_steps    onboarding_steps @relation(fields: [step_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, step_id])
+  @@index([user_id])
+  @@index([step_id])
+  @@index([completed_at(sort: Desc)])
+  @@map("onboarding_steps_completed")
   @@schema("public")
 }
 

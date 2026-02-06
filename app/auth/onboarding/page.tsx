@@ -71,7 +71,7 @@ export default function LawyerOnboardingPage() {
 
                     console.log('Token type:', type);
 
-                    if (accessToken && type === 'recovery') {
+                    if (accessToken && (type === 'recovery' || type === 'invite' || type === 'magiclink')) {
                         try {
                             // Manually set the session with the recovery token
                             const { data, error } = await supabase.auth.setSession({

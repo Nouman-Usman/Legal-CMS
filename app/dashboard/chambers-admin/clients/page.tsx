@@ -82,6 +82,33 @@ export default function ClientsPage() {
         loadData();
     }, [user?.chamber_id]);
 
+    // Real-time updates for clients
+    useEffect(() => {
+        if (!user?.chamber_id) return;
+
+        const channel = supabase
+            .channel(`clients_updates_${user.chamber_id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'users',
+                    filter: `chamber_id=eq.${user.chamber_id}`
+                },
+                (payload) => {
+                    // Only reload if the updated user is a client (or we just reload all for simplicity)
+                    // The backend query filters by role='client', so reloading is safe.
+                    loadData();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.chamber_id]);
+
     const filteredClients = useMemo(() => {
         return clients.filter(c => {
             const matchesSearch =

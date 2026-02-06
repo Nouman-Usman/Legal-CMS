@@ -101,7 +101,9 @@ export default function LawyersPage() {
           fetchLawyers();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Lawyers Realtime Status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
