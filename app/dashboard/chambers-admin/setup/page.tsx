@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,11 +37,13 @@ interface ChamberFormData {
 
 export default function ChamberSetupPage() {
     const router = useRouter();
-    const { user, loading: authLoading, userRole } = useAuth();
+    const { user, loading: authLoading, userRole, refreshProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string>('');
     const [step, setStep] = useState<'basic' | 'details'>('basic');
     const [chamber, setChamber] = useState<ChamberFormData>({
         name: '',
@@ -103,50 +104,63 @@ export default function ChamberSetupPage() {
                 throw new Error('Chamber name is required');
             }
 
-            // Create the chamber with all details
-            const { data: chamberData, error: chamberError } = await supabase
-                .from('chambers')
-                .insert({
+            // Upload logo if a file was selected
+            let logoUrl = chamber.logo_url || null;
+            if (logoFile) {
+                setUploading(true);
+                const fileExt = logoFile.name.split('.').pop();
+                const fileName = `chamber-${Date.now()}.${fileExt}`;
+                const filePath = `chamber-logos/${fileName}`;
+
+                const formData = new FormData();
+                formData.append('file', logoFile);
+                formData.append('bucket', 'chamber-assets');
+                formData.append('path', filePath);
+
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Logo upload failed');
+                }
+
+                const uploadData = await res.json();
+                logoUrl = uploadData.url || null;
+                setUploading(false);
+            }
+
+            // Create chamber via server-side API (bypasses RLS)
+            const chamberRes = await fetch('/api/chambers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
                     name: chamber.name,
-                    address: chamber.address || null,
-                    city: chamber.city || null,
-                    country: chamber.country || null,
                     phone: chamber.phone || null,
                     email: chamber.email || user?.email,
                     website: chamber.website || null,
                     description: chamber.description || null,
-                    license_number: chamber.license_number || null,
-                    logo_url: chamber.logo_url || null,
-                    admin_id: user?.id,
-                })
-                .select()
-                .single();
+                    logo_url: logoUrl,
+                    street_address: chamber.address || null,
+                    city: chamber.city || null,
+                    country: chamber.country || null,
+                }),
+            });
 
-            if (chamberError) throw chamberError;
-
-            // Update the user's chamber_id
-            const { error: userError } = await supabase
-                .from('users')
-                .update({ 
-                    onboarding_completed: true
-                })
-                .eq('id', user?.id);
-
-            if (userError) throw userError;
-
-            // Create chamber membership
-            const { error: membershipError } = await supabase
-                .from('chamber_members')
-                .insert({
-                    chamber_id: chamberData.id,
-                    user_id: user?.id,
-                    role: 'admin',
-                    is_active: true
-                });
-
-            if (membershipError) throw membershipError;
+            if (!chamberRes.ok) {
+                const errData = await chamberRes.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to create chamber');
+            }
 
             setSuccess(true);
+            
+            // Refresh profile to get updated chambers data
+            await refreshProfile();
+            
             // Redirect after brief success message
             setTimeout(() => {
                 router.push('/dashboard/chambers-admin');
@@ -160,7 +174,7 @@ export default function ChamberSetupPage() {
         }
     };
 
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -176,38 +190,21 @@ export default function ChamberSetupPage() {
             return;
         }
 
-        setUploading(true);
         setError('');
+        setLogoFile(file);
 
-        try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `chamber-${Date.now()}.${fileExt}`;
-            const filePath = `chamber-logos/${fileName}`;
+        // Create local preview URL
+        const previewUrl = URL.createObjectURL(file);
+        setLogoPreview(previewUrl);
+    };
 
-            // Upload to Supabase Storage
-            const { error: uploadError, data } = await supabase.storage
-                .from('chamber-assets')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: false,
-                });
-
-            if (uploadError) throw uploadError;
-
-            // Get the public URL
-            const { data: publicData } = supabase.storage
-                .from('chamber-assets')
-                .getPublicUrl(filePath);
-
-            if (publicData?.publicUrl) {
-                setChamber(prev => ({ ...prev, logo_url: publicData.publicUrl }));
-            }
-        } catch (err: any) {
-            console.error('Error uploading logo:', err);
-            setError('Failed to upload logo. Please try again.');
-        } finally {
-            setUploading(false);
+    const handleRemoveLogo = () => {
+        setLogoFile(null);
+        if (logoPreview) {
+            URL.revokeObjectURL(logoPreview);
+            setLogoPreview('');
         }
+        setChamber(prev => ({ ...prev, logo_url: '' }));
     };
 
     // Show loading while checking auth
@@ -459,23 +456,23 @@ export default function ChamberSetupPage() {
                                         </div>
                                     </div>
                                     <div className="bg-slate-50 dark:bg-slate-900/30 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
-                                        {chamber.logo_url ? (
+                                        {logoPreview ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-4">
                                                         <img 
-                                                            src={chamber.logo_url} 
+                                                            src={logoPreview} 
                                                             alt="Chamber Logo" 
                                                             className="h-16 w-16 object-contain rounded-lg border-2 border-slate-200 dark:border-slate-600"
                                                         />
                                                         <div>
-                                                            <p className="text-sm font-semibold text-slate-900 dark:text-white">Logo uploaded</p>
-                                                            <p className="text-xs text-slate-500">Your chamber logo is ready</p>
+                                                            <p className="text-sm font-semibold text-slate-900 dark:text-white">Logo selected</p>
+                                                            <p className="text-xs text-slate-500">Will be uploaded when you submit</p>
                                                         </div>
                                                     </div>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setChamber(prev => ({ ...prev, logo_url: '' }))}
+                                                        onClick={handleRemoveLogo}
                                                         className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
                                                     >
                                                         <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
@@ -485,13 +482,12 @@ export default function ChamberSetupPage() {
                                                     <input
                                                         type="file"
                                                         accept="image/*"
-                                                        onChange={handleLogoUpload}
-                                                        disabled={uploading}
+                                                        onChange={handleLogoSelect}
                                                         className="hidden"
                                                     />
                                                     <div className="py-3 px-4 bg-white dark:bg-slate-800 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-lg hover:border-indigo-500 transition-colors cursor-pointer text-center">
                                                         <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
-                                                            {uploading ? 'Uploading...' : 'Replace logo'}
+                                                            Replace logo
                                                         </p>
                                                     </div>
                                                 </label>
@@ -501,8 +497,7 @@ export default function ChamberSetupPage() {
                                                 <input
                                                     type="file"
                                                     accept="image/*"
-                                                    onChange={handleLogoUpload}
-                                                    disabled={uploading}
+                                                    onChange={handleLogoSelect}
                                                     className="hidden"
                                                 />
                                                 <div className="py-8 px-4 bg-white dark:bg-slate-800 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-lg hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all">
@@ -512,7 +507,7 @@ export default function ChamberSetupPage() {
                                                         </div>
                                                         <div className="text-center">
                                                             <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                                                                {uploading ? 'Uploading logo...' : 'Click to upload logo'}
+                                                                Click to select logo
                                                             </p>
                                                             <p className="text-xs text-slate-500 dark:text-slate-400">
                                                                 PNG, JPG, GIF up to 5MB
@@ -565,12 +560,12 @@ export default function ChamberSetupPage() {
                                     <Button
                                         type="submit"
                                         className="flex-1 h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all hover:shadow-xl hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={loading || !chamber.name.trim()}
+                                        disabled={loading || uploading || !chamber.name.trim()}
                                     >
-                                        {loading ? (
+                                        {loading || uploading ? (
                                             <>
                                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                Creating Chamber...
+                                                {uploading ? 'Uploading Logo...' : 'Creating Chamber...'}
                                             </>
                                         ) : (
                                             <>

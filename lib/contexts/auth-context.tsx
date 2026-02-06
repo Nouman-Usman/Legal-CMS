@@ -34,6 +34,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   userRole: UserRole | null;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -289,6 +290,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const refreshProfile = async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const profile = await getProfileWithRetry(authUser);
+      if (profile) {
+        setUser({
+          ...authUser,
+          ...profile,
+        } as UserProfile);
+      }
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -296,6 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signOut: handleSignOut,
         userRole: user?.role || null,
+        refreshProfile,
       }}
     >
       {children}
