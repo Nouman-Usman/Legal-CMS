@@ -1,41 +1,89 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/lib/components/protected-route';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/contexts/auth-context';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { ClientDocumentList } from '@/components/client/client-document-list';
+import { UploadDocumentModal } from '@/components/client/upload-document-modal';
 import {
-    FolderOpen,
     Search,
-    Download,
-    FileText,
-    Clock,
     Filter,
-    ShieldCheck,
-    ChevronRight,
-    MoreVertical,
-    Plus,
-    ArrowRight,
-    Sparkles,
     Lock,
-    Eye,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    ChevronRight,
+    Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const DOCUMENTS = [
-    { id: '1', name: 'Court Filing - Civil 452.pdf', case: 'Smith vs. Johnson', date: '2 hours ago', size: '1.2 MB', category: 'Legal' },
-    { id: '2', name: 'Property Deed Scan.jpg', case: 'Real Estate Portfolio', date: 'Yesterday', size: '4.5 MB', category: 'Evidence' },
-    { id: '3', name: 'Settlement Draft v2.docx', case: 'Corporate Merger', date: '3 days ago', size: '450 KB', category: 'Draft' },
-    { id: '4', name: 'Witness Statement.pdf', case: 'Smith vs. Johnson', date: '1 week ago', size: '890 KB', category: 'Discovery' },
-    { id: '5', name: 'Power of Attorney.pdf', case: 'General Legal', date: '2 weeks ago', size: '1.1 MB', category: 'Administrative' },
-];
+import Link from 'next/link';
 
 export default function ClientDocumentsPage() {
+    const { user } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
+    const [documents, setDocuments] = useState<any[]>([]);
+    const [cases, setCases] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = async () => {
+        if (!user) return;
+        try {
+            setLoading(true);
+
+            // 1. Fetch Client's Cases first
+            const { data: casesData, error: casesError } = await supabase
+                .from('cases')
+                .select('id, title, case_number')
+                .eq('client_id', user.id);
+
+            if (casesError) throw casesError;
+            setCases(casesData || []);
+
+            if (casesData && casesData.length > 0) {
+                const caseIds = casesData.map(c => c.id);
+
+                // 2. Fetch Documents involved in these cases
+                const { data: docsData, error: docsError } = await supabase
+                    .from('case_documents')
+                    .select('*')
+                    .in('case_id', caseIds)
+                    .order('created_at', { ascending: false });
+
+                if (docsError) throw docsError;
+                setDocuments(docsData || []);
+            } else {
+                setDocuments([]);
+            }
+
+        } catch (error) {
+            console.error('Error fetching documents:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [user]);
+
+    // Simple Filter Logic
+    const filteredDocs = documents.filter(doc =>
+        doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    if (loading) {
+        return (
+            <ProtectedRoute requiredRole="client">
+                <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Synchronizing Vault...</p>
+                </div>
+            </ProtectedRoute>
+        );
+    }
 
     return (
         <ProtectedRoute requiredRole="client">
@@ -51,9 +99,12 @@ export default function ClientDocumentsPage() {
                             <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px]">Your entire legal discovery vault</p>
                         </div>
                         <div className="flex items-center gap-3">
-                            <Button className="bg-slate-900 dark:bg-slate-800 text-white font-black rounded-2xl h-12 px-8 border-none shadow-xl transition-all hover:scale-105 uppercase tracking-tight text-xs">
-                                <Plus className="w-4 h-4 mr-2" /> Upload for Review
-                            </Button>
+                            <UploadDocumentModal
+                                userId={user?.id || ''}
+                                cases={cases}
+                                existingDocuments={documents}
+                                onUploadComplete={fetchData}
+                            />
                         </div>
                     </div>
 
@@ -114,7 +165,7 @@ export default function ClientDocumentsPage() {
                         <div className="lg:col-span-3 space-y-6">
 
                             <div className="flex items-center justify-between px-4">
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Vault Inventory: <span className="text-slate-900 dark:text-white">{DOCUMENTS.length} Objects</span></p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Vault Inventory: <span className="text-slate-900 dark:text-white">{filteredDocs.length} Objects</span></p>
                                 <div className="flex gap-2">
                                     <Button variant="ghost" size="sm" className="rounded-xl font-bold gap-2 text-slate-500">
                                         <Filter className="w-4 h-4" /> Filters
@@ -122,57 +173,7 @@ export default function ClientDocumentsPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {DOCUMENTS.map((doc) => (
-                                    <Card key={doc.id} className="border-none shadow-sm dark:bg-slate-900 rounded-[32px] overflow-hidden bg-white group hover:shadow-2xl hover:shadow-blue-500/5 transition-all duration-300">
-                                        <CardContent className="p-8">
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:scale-110 shadow-inner">
-                                                    <FileText className="w-8 h-8" />
-                                                </div>
-                                                <div className="flex-1 space-y-4 pt-1">
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <h3 className="font-black text-slate-900 dark:text-white text-base leading-tight uppercase italic tracking-tighter">{doc.name}</h3>
-                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Case: <span className="text-blue-600">{doc.case}</span></p>
-                                                        </div>
-                                                        <button className="text-slate-300 hover:text-slate-900 dark:hover:text-white">
-                                                            <MoreVertical className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between pt-4 border-t border-slate-50 dark:border-slate-800/50">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1"><Clock className="w-3 h-3" /> {doc.date}</span>
-                                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">|</span>
-                                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{doc.size}</span>
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <Button size="icon" variant="ghost" className="w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white transition-all">
-                                                                <Download className="w-4 h-4" />
-                                                            </Button>
-                                                            <Button size="icon" variant="ghost" className="w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-600 hover:text-white transition-all">
-                                                                <Eye className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-
-                                {/* Secure Dropzone Card */}
-                                <Card className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-transparent rounded-[32px] flex flex-col items-center justify-center p-10 text-center space-y-6 hover:border-blue-400 hover:bg-blue-50/10 transition-all cursor-pointer group">
-                                    <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
-                                        <Plus className="w-8 h-8 text-slate-400" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm leading-none italic">Secure Dropzone</h3>
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Drag files here for legal indexing</p>
-                                    </div>
-                                </Card>
-                            </div>
+                            <ClientDocumentList documents={filteredDocs} />
 
                             {/* Capacity Overview */}
                             <div className="pt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -191,7 +192,7 @@ export default function ClientDocumentsPage() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Unread Updates</p>
-                                        <p className="text-4xl font-black italic tracking-tighter mt-1">2 Secure Files</p>
+                                        <p className="text-4xl font-black italic tracking-tighter mt-1">{filteredDocs.length} Secure Files</p>
                                     </div>
                                 </Card>
                             </div>

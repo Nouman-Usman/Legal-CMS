@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { UploadDocumentModal } from '@/components/client/upload-document-modal';
+import { ClientDocumentList } from '@/components/client/client-document-list';
 
 interface Case {
   id: string;
@@ -57,6 +59,7 @@ export default function ClientCasesPage() {
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [documents, setDocuments] = useState<any[]>([]);
 
   useEffect(() => {
     const loadCases = async () => {
@@ -81,6 +84,31 @@ export default function ClientCasesPage() {
     };
     loadCases();
   }, [user]);
+
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      if (!selectedCase) return;
+
+      const { data, error } = await supabase
+        .from('case_documents')
+        .select('*')
+        .eq('case_id', selectedCase.id)
+        .order('created_at', { ascending: false });
+
+      if (data) setDocuments(data);
+    };
+    fetchDocuments();
+  }, [selectedCase]);
+
+  const refreshDocuments = async () => {
+    if (!selectedCase) return;
+    const { data } = await supabase
+      .from('case_documents')
+      .select('*')
+      .eq('case_id', selectedCase.id)
+      .order('created_at', { ascending: false });
+    if (data) setDocuments(data);
+  };
 
   const filteredCases = cases.filter(c =>
     c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -294,28 +322,20 @@ export default function ClientCasesPage() {
                   </TabsContent>
 
                   <TabsContent value="documents" className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        { name: 'Initial Filing.pdf', type: 'Court Doc', size: '1.2 MB' },
-                        { name: 'Evidence Bundle A.zip', type: 'Discovery', size: '45 MB' },
-                        { name: 'Strategy Note.docx', type: 'Privileged', size: '24 KB' }
-                      ].map((doc, i) => (
-                        <div key={i} className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-between group hover:border-blue-600 transition-all">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                              <FileText className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-slate-900 dark:text-white uppercase truncate max-w-[150px]">{doc.name}</p>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{doc.type} • {doc.size}</p>
-                            </div>
-                          </div>
-                          <Button size="icon" variant="ghost" className="rounded-xl hover:bg-blue-600 hover:text-white transition-colors">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
+                    <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800">
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-black italic uppercase tracking-tighter">Case Vault</h3>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{documents.length} Secure Files</p>
+                      </div>
+                      <UploadDocumentModal
+                        caseId={selectedCase?.id}
+                        userId={user?.id || ''}
+                        existingDocuments={documents}
+                        onUploadComplete={refreshDocuments}
+                      />
                     </div>
+
+                    <ClientDocumentList documents={documents} />
                   </TabsContent>
 
                   <TabsContent value="counsel" className="animate-in slide-in-from-bottom-2 duration-500">

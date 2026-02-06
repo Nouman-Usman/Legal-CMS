@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { pusherClient } from '@/lib/pusher';
+import { subscribeToChannel } from '@/lib/realtime';
 import { getUserNotifications, markNotificationAsRead } from '@/lib/supabase/messages';
 
 interface Notification {
@@ -44,24 +44,20 @@ export function useNotifications(userId: string | null) {
     loadNotifications();
   }, [userId]);
 
-  // Subscribe to real-time notifications
+  // Subscribe to real-time notifications via Supabase Realtime
   useEffect(() => {
     if (!userId) return;
 
-    if (!pusherClient.subscribe) return;
-    const channel = pusherClient.subscribe(`user-${userId}`);
+    const { unsubscribe } = subscribeToChannel(
+      `user-${userId}`,
+      'notification',
+      (data: Notification) => {
+        setNotifications((prev) => [data, ...prev]);
+        setUnreadCount((prev) => prev + 1);
+      }
+    );
 
-    const handleNotification = (data: Notification) => {
-      setNotifications((prev) => [data, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-    };
-
-    channel.bind('notification', handleNotification);
-
-    return () => {
-      channel.unbind('notification', handleNotification);
-      pusherClient.unsubscribe(`user-${userId}`);
-    };
+    return unsubscribe;
   }, [userId]);
 
   const markAsRead = async (notificationId: string) => {

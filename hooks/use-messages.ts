@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { pusherClient } from '@/lib/pusher';
+import { subscribeToChannel } from '@/lib/realtime';
 import { getConversationMessages, sendMessage, getOrCreateConversation } from '@/lib/supabase/messages';
 
 interface Message {
@@ -40,22 +40,19 @@ export function useMessages(conversationId: string | null) {
     loadMessages();
   }, [conversationId]);
 
-  // Subscribe to real-time messages
+  // Subscribe to real-time messages via Supabase Realtime
   useEffect(() => {
     if (!conversationId) return;
 
-    const channel = pusherClient.subscribe(`conversation-${conversationId}`);
+    const { unsubscribe } = subscribeToChannel(
+      `conversation-${conversationId}`,
+      'message',
+      (data: Message) => {
+        setMessages((prev) => [...prev, data]);
+      }
+    );
 
-    const handleMessage = (data: Message) => {
-      setMessages((prev) => [...prev, data]);
-    };
-
-    channel.bind('message', handleMessage);
-
-    return () => {
-      channel.unbind('message', handleMessage);
-      pusherClient.unsubscribe(`conversation-${conversationId}`);
-    };
+    return unsubscribe;
   }, [conversationId]);
 
   const send = useCallback(

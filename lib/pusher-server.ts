@@ -1,19 +1,53 @@
-import PusherServer from 'pusher';
-const pusherAppId = process.env.PUSHER_APP_ID;
-const pusherSecret = process.env.PUSHER_SECRET;
-const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+/**
+ * Supabase Realtime Broadcast Server
+ * Replaces Pusher Server
+ */
 
-if (!pusherAppId || !pusherSecret || !pusherCluster) {
-  throw new Error('Missing Pusher environment variables on server');
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
 }
 
-// Server-side Pusher instance (only used in API routes)
-export const pusherServer = new PusherServer({
-  appId: pusherAppId,
-  key: process.env.PUSHER_KEY || 'pusher-key',
-  secret: pusherSecret,
-  cluster: pusherCluster,
-  useTLS: true,
+// Create admin client for server-side operations
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
 });
 
-export default pusherServer;
+/**
+ * Broadcast an event to a channel using Supabase Realtime
+ */
+export async function broadcastEvent(
+  channelName: string,
+  event: string,
+  data: any
+): Promise<void> {
+  try {
+    const channel = supabaseAdmin.channel(channelName, {
+      config: {
+        broadcast: { self: true },
+      },
+    });
+
+    await channel.subscribe();
+    await channel.send({
+      type: 'broadcast',
+      event,
+      payload: data,
+    });
+
+    await channel.unsubscribe();
+  } catch (error) {
+    console.error('Failed to broadcast event:', error);
+    throw error;
+  }
+}
+
+export default { broadcastEvent, supabaseAdmin };
+

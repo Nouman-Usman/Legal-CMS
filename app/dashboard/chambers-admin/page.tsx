@@ -223,7 +223,7 @@ export default function ChambersAdminDashboard() {
                   </p>
                 </div>
                 <div className="flex gap-4">
-                  <Link href="/dashboard/chambers-admin/lawyers/onboard">
+                  <Link href="/dashboard/chambers-admin/lawyers/">
                     <Button className="bg-white text-slate-900 hover:bg-blue-50 font-black rounded-2xl h-12 px-8 border-none shadow-xl transition-all hover:scale-105 uppercase tracking-tight text-xs">
                       Add New Lawyer
                     </Button>

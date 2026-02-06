@@ -28,7 +28,8 @@ import {
     User as UserIcon,
     ArrowUpRight,
     Lock,
-    UserPlus
+    UserPlus,
+    Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -47,12 +48,19 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         const common = {
             label: 'Main',
             items: [
+                { name: 'Home', href: '/', icon: Home },
                 { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
             ]
         };
 
         if (userRole === 'chamber_admin') {
             return [
+                {
+                    label: 'Main',
+                    items: [
+                        { name: 'Home', href: '/dashboard/chambers-admin', icon: Home },
+                    ]
+                },
                 {
                     label: 'Management',
                     items: [
@@ -79,6 +87,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
         if (userRole === 'lawyer') {
             return [
+                {
+                    label: 'Main',
+                    items: [
+                        { name: 'Home', href: '/dashboard/lawyer', icon: Home },
+                    ]
+                },
                 {
                     label: 'Operations',
                     items: [
@@ -111,6 +125,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
         if (userRole === 'client') {
             return [
+                {
+                    label: 'Main',
+                    items: [
+                        { name: 'Home', href: '/dashboard/client', icon: Home },
+                    ]
+                },
                 {
                     label: 'Client Dashboard',
                     items: [
@@ -176,7 +196,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                         )}
                         <div className="space-y-1.5">
                             {group.items.map((item) => {
-                                const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                                const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/' && !['/dashboard/chambers-admin', '/dashboard/lawyer', '/dashboard/client'].includes(item.href) && pathname.startsWith(item.href + '/'));
                                 return (
                                     <Link
                                         key={item.href}

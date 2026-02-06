@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ProtectedRoute } from '@/lib/components/protected-route';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,63 +11,166 @@ import {
   Search,
   Phone,
   Video,
-  Info,
   Send,
-  Clock,
-  ShieldCheck,
-  MoreVertical,
   Paperclip,
-  ChevronRight,
-  Sparkles,
-  Lock,
-  Circle
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/contexts/auth-context';
+import { supabase } from '@/lib/supabase/client';
+import {
+  getUserConversations,
+  getConversationMessages,
+  sendMessage
+} from '@/lib/supabase/messages';
+import { toast } from 'sonner';
 
 export default function ClientMessagesPage() {
-  const [selectedConversation, setSelectedConversation] = useState<number | null>(0);
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const conversations = [
-    {
-      id: 1,
-      name: 'David Martinez',
-      title: 'Lead Counsel',
-      lastMessage: 'I will have an update for you by Friday...',
-      timestamp: '2 hours ago',
-      unread: 1,
-      status: 'online',
-      avatar: 'DM',
-      caseTitle: 'Smith vs. Johnson',
-    },
-    {
-      id: 2,
-      name: 'Sarah Chen',
-      title: 'Associate Attorney',
-      lastMessage: 'All documents have been filed successfully',
-      timestamp: '1 day ago',
-      unread: 0,
-      status: 'offline',
-      avatar: 'SC',
-      caseTitle: 'Chen Settlement',
-    },
-  ];
-
-  const messages = [
-    { id: 1, sender: 'David Martinez', role: 'Lead Counsel', content: 'Hi, I wanted to provide you an update on your case', time: '10:30 AM', isOwn: false },
-    { id: 2, sender: 'You', role: 'Client', content: 'Thank you! I was wondering about the next steps.', time: '10:35 AM', isOwn: true },
-    { id: 3, sender: 'David Martinez', role: 'Lead Counsel', content: 'We are preparing for the hearing scheduled for February 15th. I will have an update for you by Friday with all the necessary documents.', time: '10:40 AM', isOwn: false },
-  ];
-
-  const selectedChat = conversations[selectedConversation || 0];
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newMessage.trim()) {
-      setNewMessage('');
+  // 1. Fetch Conversations
+  const fetchConversations = async () => {
+    if (!user) return;
+    const { conversations: data, error } = await getUserConversations(user.id);
+    if (error) {
+      toast.error('Failed to load conversations');
+    } else {
+      setConversations(data || []);
+      // If no thread selected and we have threads, maybe select first? 
+      // Or keep it empty to show "Select a conversation".
     }
+    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchConversations();
+  }, [user]);
+
+  // 2. Realtime Subscription for Thread Updates (New threads / New messages in threads)
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('threads_list_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'message_threads',
+          filter: `participant_ids=cs.{${user.id}}` // 'cs' = contains
+        },
+        () => {
+          // simple: reload conversations to get updated 'updated_at' and sorting
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // 3. Load Messages for Selected Thread
+  useEffect(() => {
+    if (!selectedThreadId) return;
+
+    const loadMessages = async () => {
+      const { messages: data, error } = await getConversationMessages(selectedThreadId);
+      if (error) {
+        toast.error('Failed to load messages');
+      } else {
+        // Reverse because getConversationMessages returns created_at desc (newest first), 
+        // but UI typically needs oldest at top (or we handle display order).
+        // Let's assume UI needs array ordered by time ascending.
+        setMessages((data || []).reverse());
+      }
+    };
+
+    loadMessages();
+
+    // 4. Realtime Messages for Selected Active Thread
+    const channel = supabase
+      .channel(`thread_${selectedThreadId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `thread_id=eq.${selectedThreadId}`
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          setMessages((prev) => [...prev, newMsg]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedThreadId]);
+
+  // Scroll to bottom on new message
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !user || !selectedThreadId) return;
+
+    setSending(true);
+    const { error } = await sendMessage(selectedThreadId, user.id, newMessage);
+
+    if (error) {
+      toast.error('Failed to send message');
+    } else {
+      setNewMessage('');
+      // Message is optimistic or waits for Realtime? 
+      // Realtime usually arrives fast. But for better UX we could optimistic update.
+      // For now relying on Realtime is safer to ensure it saved.
+    }
+    setSending(false);
+  };
+
+  // Helper to get display info for a conversation
+  const getConversationDisplay = (conv: any) => {
+    const otherUser = conv.otherUser;
+    const name = otherUser?.full_name || 'Unknown User';
+    const role = otherUser?.role || 'User';
+    // Initials for avatar
+    const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+
+    // Last message teaser? We don't fetch last message content in getUserConversations yet,
+    // assuming 'updated_at' is proxy for activity.
+    // If we want last message, we'd need to modify the backend helper.
+    // For now, show role or status.
+
+    return { name, role, initials, id: conv.id };
+  };
+
+  // Filter conversations
+  const filteredConversations = conversations.filter(c => {
+    const display = getConversationDisplay(c);
+    return display.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  // Get active chat display info
+  const activeChat = conversations.find(c => c.id === selectedThreadId);
+  const activeDisplay = activeChat ? getConversationDisplay(activeChat) : null;
 
   return (
     <ProtectedRoute requiredRole="client">
@@ -95,41 +197,51 @@ export default function ClientMessagesPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-6 space-y-2">
-              {conversations.map((conv, idx) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setSelectedConversation(idx)}
-                  className={cn(
-                    "w-full p-6 rounded-[32px] text-left transition-all relative overflow-hidden group border",
-                    selectedConversation === idx
-                      ? "bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-900 shadow-2xl shadow-blue-500/10"
-                      : "bg-slate-50/50 dark:bg-slate-800/20 border-transparent hover:bg-white dark:hover:bg-slate-800/40"
-                  )}
-                >
-                  {selectedConversation === idx && <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-600" />}
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center text-xl font-black italic shadow-inner">
-                        {conv.avatar}
+              {loading && <div className="p-4 text-center text-slate-400">Loading secure channels...</div>}
+              {!loading && filteredConversations.length === 0 && (
+                <div className="p-4 text-center text-slate-400 text-sm">No active conversations found.</div>
+              )}
+              {filteredConversations.map((conv) => {
+                const { name, role, initials, id } = getConversationDisplay(conv);
+                const isSelected = selectedThreadId === id;
+
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedThreadId(id)}
+                    className={cn(
+                      "w-full p-6 rounded-[32px] text-left transition-all relative overflow-hidden group border",
+                      isSelected
+                        ? "bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-900 shadow-2xl shadow-blue-500/10"
+                        : "bg-slate-50/50 dark:bg-slate-800/20 border-transparent hover:bg-white dark:hover:bg-slate-800/40"
+                    )}
+                  >
+                    {isSelected && <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-600" />}
+                    <div className="flex items-start gap-4">
+                      <div className="relative">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center text-xl font-black italic shadow-inner">
+                          {initials}
+                        </div>
                       </div>
-                      {conv.status === 'online' && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-4 border-white dark:border-slate-800" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start">
-                        <h3 className={cn(
-                          "font-black text-base leading-none uppercase italic tracking-tighter truncate",
-                          selectedConversation === idx ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
-                        )}>{conv.name}</h3>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{conv.timestamp}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <h3 className={cn(
+                            "font-black text-base leading-none uppercase italic tracking-tighter truncate",
+                            isSelected ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
+                          )}>{name}</h3>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            {new Date(conv.updated_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{role}</p>
+                        <p className="text-xs text-slate-500 font-medium truncate mt-3 pr-4">
+                          {conv.subject || 'Direct Message'}
+                        </p>
                       </div>
-                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{conv.title}</p>
-                      <p className="text-xs text-slate-500 font-medium truncate mt-3 pr-4">"{conv.lastMessage}"</p>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="p-8 bg-indigo-950 text-white shrink-0 relative overflow-hidden group">
@@ -145,21 +257,21 @@ export default function ClientMessagesPage() {
 
           {/* Main Chat Interface */}
           <main className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-950 relative">
-            {selectedChat ? (
+            {selectedThreadId && activeDisplay ? (
               <>
                 {/* Chat Header */}
                 <header className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-950 z-10 shrink-0">
                   <div className="flex items-center gap-6">
                     <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-2xl font-black italic text-blue-600 shadow-inner">
-                      {selectedChat.avatar}
+                      {activeDisplay.initials}
                     </div>
                     <div>
                       <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 dark:text-white leading-none uppercase">{selectedChat.name}</h2>
-                        <Badge className="bg-emerald-500/10 text-emerald-600 font-black text-[9px] uppercase tracking-widest border border-emerald-500/20">Active Access</Badge>
+                        <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 dark:text-white leading-none uppercase">{activeDisplay.name}</h2>
+                        <Badge className="bg-emerald-500/10 text-emerald-600 font-black text-[9px] uppercase tracking-widest border border-emerald-500/20">Active</Badge>
                       </div>
                       <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none shrink-0 group">
-                        Matter: <span className="text-blue-600 italic">{selectedChat.caseTitle}</span>
+                        Role: <span className="text-blue-600 italic">{activeDisplay.role}</span>
                       </p>
                     </div>
                   </div>
@@ -176,33 +288,47 @@ export default function ClientMessagesPage() {
                 {/* Messages Feed */}
                 <div className="flex-1 overflow-y-auto p-10 space-y-10 scroll-smooth bg-slate-50/30 dark:bg-slate-950">
                   <div className="text-center py-4">
-                    <span className="px-4 py-1.5 rounded-full bg-slate-900/5 dark:bg-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic">Security established at 09:00 AM Today</span>
+                    <span className="px-4 py-1.5 rounded-full bg-slate-900/5 dark:bg-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic">
+                      Secure Channel Established
+                    </span>
                   </div>
 
-                  {messages.map((msg) => (
-                    <div key={msg.id} className={cn("flex flex-col gap-2 max-w-[70%]", msg.isOwn ? "ml-auto items-end" : "items-start")}>
-                      <div className={cn(
-                        "p-6 rounded-[36px] shadow-sm relative overflow-hidden",
-                        msg.isOwn
-                          ? "bg-slate-900 text-white rounded-br-none"
-                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-bl-none border border-slate-100 dark:border-slate-800"
-                      )}>
-                        {msg.isOwn && <div className="absolute top-0 right-0 w-2 h-full bg-blue-600" />}
-                        <p className="text-base font-medium leading-relaxed italic">{msg.content}</p>
+                  {messages.map((msg) => {
+                    const isOwn = msg.sender_id === user?.id;
+                    return (
+                      <div key={msg.id} className={cn("flex flex-col gap-2 max-w-[70%]", isOwn ? "ml-auto items-end" : "items-start")}>
+                        <div className={cn(
+                          "p-6 rounded-[36px] shadow-sm relative overflow-hidden",
+                          isOwn
+                            ? "bg-slate-900 text-white rounded-br-none"
+                            : "bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-bl-none border border-slate-100 dark:border-slate-800"
+                        )}>
+                          {isOwn && <div className="absolute top-0 right-0 w-2 h-full bg-blue-600" />}
+                          <p className="text-base font-medium leading-relaxed italic">{msg.content}</p>
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-4">
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-4">{msg.time} • {msg.sender}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                {/* Premium Input Unit */}
+                {/* Footer Input */}
                 <footer className="p-10 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 shrink-0">
                   <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex flex-col gap-4">
                     <div className="relative group">
                       <Textarea
-                        placeholder="Secure message to Lead Counsel..."
+                        placeholder="Secure message..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(e);
+                          }
+                        }}
                         className="min-h-[120px] rounded-[32px] bg-slate-50 dark:bg-slate-800 border-none shadow-inner p-8 text-base font-medium focus:ring-4 focus:ring-blue-500/10 resize-none"
                       />
                       <div className="absolute right-6 bottom-6 flex gap-2">
@@ -211,10 +337,10 @@ export default function ClientMessagesPage() {
                         </Button>
                         <Button
                           type="submit"
-                          disabled={!newMessage.trim()}
+                          disabled={!newMessage.trim() || sending}
                           className="rounded-2xl h-11 px-8 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[10px] border-none shadow-xl shadow-blue-500/20 gap-2 transition-all hover:scale-105"
                         >
-                          <Send className="w-4 h-4" /> Finalize & Send
+                          <Send className="w-4 h-4" /> {sending ? 'Sending...' : 'Send'}
                         </Button>
                       </div>
                     </div>
@@ -229,7 +355,7 @@ export default function ClientMessagesPage() {
                 </div>
                 <div className="space-y-4">
                   <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Intelligence Stream</h2>
-                  <p className="text-slate-500 font-bold text-xs uppercase italic tracking-widest">Select a counsel representative from the Left Array to establish a secure comms link.</p>
+                  <p className="text-slate-500 font-bold text-xs uppercase italic tracking-widest">Select a channel to begin.</p>
                 </div>
               </div>
             )}

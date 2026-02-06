@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { pusherServer } from '@/lib/pusher-server';
+import { broadcastEvent } from '@/lib/realtime';
 
 export async function POST(request: Request) {
     try {
@@ -13,13 +13,17 @@ export async function POST(request: Request) {
             );
         }
 
-        await pusherServer.trigger(channel, event, data);
+        await broadcastEvent(channel, event, data);
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Pusher trigger error:', error);
+    } catch (error: any) {
+        console.error('Supabase Realtime broadcast error:', {
+            message: error.message,
+            stack: error.stack,
+            error: error
+        });
         return NextResponse.json(
-            { error: 'Failed to trigger Pusher event' },
+            { error: 'Failed to broadcast event', details: error.message },
             { status: 500 }
         );
     }
