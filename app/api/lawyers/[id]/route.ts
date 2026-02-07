@@ -36,10 +36,10 @@ export async function DELETE(
             );
         }
 
-        // Verify the lawyer exists and is actually a lawyer
+        // Verify the lawyer exists
         const { data: lawyer, error: checkError } = await supabaseAdmin
             .from('users')
-            .select('id, role, chamber_id')
+            .select('id, role')
             .eq('id', lawyerId)
             .single();
 
@@ -50,58 +50,24 @@ export async function DELETE(
             );
         }
 
-        if (lawyer.role !== 'lawyer') {
-            return NextResponse.json(
-                { error: 'User is not a lawyer' },
-                { status: 400 }
-            );
+        // Get chamber_id from query params if available
+        const { searchParams } = new URL(request.url);
+        const chamberId = searchParams.get('chamber_id');
+
+        let memberQuery = supabaseAdmin
+            .from('chamber_members')
+            .delete()
+            .eq('user_id', lawyerId);
+
+        if (chamberId) {
+            memberQuery = memberQuery.eq('chamber_id', chamberId);
         }
 
-        // Remove lawyer from chamber (set chamber_id to null and status to inactive)
-        // OR completely delete the user from auth and database
+        const { error: deleteError } = await memberQuery;
 
-        // Option 1: Soft delete - just remove from chamber (keep their account)
-        // const { error: updateError } = await supabaseAdmin
-        //     .from('users')
-        //     .update({ 
-        //         chamber_id: null, 
-        //         status: 'inactive' 
-        //     })
-        //     .eq('id', lawyerId);
-
-        // Option 2: Hard delete - completely remove user from auth and database
-
-        // First, delete from users table with soft delete (set deleted_at)
-        const { error: softDeleteError } = await supabaseAdmin
-            .from('users')
-            .update({
-                deleted_at: new Date().toISOString(),
-                chamber_id: null,
-                status: 'inactive'
-            })
-            .eq('id', lawyerId);
-
-        if (softDeleteError) {
-            console.error('Error soft deleting lawyer from users table:', softDeleteError);
-            throw softDeleteError;
-        }
-
-        // Then, delete from Supabase Auth (this is permanent)
-        const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(
-            lawyerId
-        );
-
-        if (authDeleteError) {
-            console.error('Error deleting lawyer from auth:', authDeleteError);
-            // Rollback the soft delete if auth deletion fails
-            await supabaseAdmin
-                .from('users')
-                .update({
-                    deleted_at: null,
-                    status: 'active'
-                })
-                .eq('id', lawyerId);
-            throw authDeleteError;
+        if (deleteError) {
+             console.error('Error removing lawyer from chamber:', deleteError);
+             throw deleteError;
         }
 
         return NextResponse.json({
@@ -130,7 +96,7 @@ export async function PATCH(
 
         const { id: lawyerId } = await params;
         const body = await request.json();
-        const { status } = body;
+        const { status, chamber_id } = body;
 
         if (!lawyerId) {
             return NextResponse.json(
@@ -146,12 +112,20 @@ export async function PATCH(
             );
         }
 
-        // Update lawyer status
-        const { error: updateError } = await supabaseAdmin
-            .from('users')
-            .update({ status })
-            .eq('id', lawyerId)
-            .eq('role', 'lawyer');
+        // Map status string to is_active boolean
+        const isActive = status === 'active';
+
+        // Update chamber member status
+        let updateQuery = supabaseAdmin
+            .from('chamber_members')
+            .update({ is_active: isActive })
+            .eq('user_id', lawyerId);
+
+        if (chamber_id) {
+            updateQuery = updateQuery.eq('chamber_id', chamber_id);
+        }
+
+        const { error: updateError } = await updateQuery;
 
         if (updateError) {
             console.error('Error updating lawyer status:', updateError);

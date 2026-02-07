@@ -127,20 +127,31 @@ export default function LawyerOnboardPage() {
         return;
       }
 
-      // Update user with lawyer profile data
-      const { error } = await supabase
+      // Update basic user info
+      const { error: userError } = await supabase
         .from('users')
         .update({
-          lawyer_profile: profile,
           onboarding_completed: true,
-          specialization: profile.practiceAreas.join(', '),
-          bar_number: profile.licenseNumber,
           phone: profile.phone,
         })
         .eq('id', user.id);
 
-      if (error) {
-        throw error;
+      if (userError) throw userError;
+
+      // Update/Upsert lawyer-specific info
+      const { error: lawyerError } = await supabase
+        .from('lawyers')
+        .upsert({
+          user_id: user.id,
+          specialization: profile.practiceAreas.join(', '),
+          bar_number: profile.licenseNumber,
+          bio: profile.bio,
+          experience_years: profile.yearsOfExperience,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (lawyerError) {
+        throw lawyerError;
       }
 
       setSuccess(true);
@@ -218,9 +229,8 @@ export default function LawyerOnboardPage() {
                     placeholder="e.g., BAR-001234"
                     value={profile.licenseNumber}
                     onChange={(e) => handleInputChange('licenseNumber', e.target.value)}
-                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${
-                      errors.licenseNumber ? 'border-red-500' : ''
-                    }`}
+                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${errors.licenseNumber ? 'border-red-500' : ''
+                      }`}
                   />
                   {errors.licenseNumber && (
                     <p className="text-sm text-red-600 dark:text-red-400">{errors.licenseNumber}</p>
@@ -275,18 +285,16 @@ export default function LawyerOnboardPage() {
                       key={area}
                       type="button"
                       onClick={() => togglePracticeArea(area)}
-                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${
-                        profile.practiceAreas.includes(area)
+                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${profile.practiceAreas.includes(area)
                           ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400'
                           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                          profile.practiceAreas.includes(area)
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${profile.practiceAreas.includes(area)
                             ? 'border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500'
                             : 'border-slate-300 dark:border-slate-600'
-                        }`}>
+                          }`}>
                           {profile.practiceAreas.includes(area) && (
                             <CheckCircle2 className="w-3 h-3 text-white" />
                           )}
@@ -329,9 +337,8 @@ export default function LawyerOnboardPage() {
                     value={profile.tagline}
                     onChange={(e) => handleInputChange('tagline', e.target.value)}
                     maxLength={100}
-                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${
-                      errors.tagline ? 'border-red-500' : ''
-                    }`}
+                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${errors.tagline ? 'border-red-500' : ''
+                      }`}
                   />
                   <p className="text-xs text-slate-600 dark:text-slate-400">
                     This appears on your profile and helps clients understand your expertise

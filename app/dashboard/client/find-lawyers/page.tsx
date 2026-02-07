@@ -59,6 +59,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/lib/contexts/auth-context';
 import { getOrCreateConversation, sendMessage, sendNotification } from '@/lib/supabase/messages';
+import { createLead } from '@/lib/supabase/leads';
 import { getCasesByFilter } from '@/lib/supabase/cases';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -69,8 +70,7 @@ interface Lawyer {
   email: string;
   phone?: string;
   avatar_url?: string;
-  bar_number?: string;
-  chamber_id: string;
+  chamber_id?: string;
   status: string;
   lawyer_profile?: {
     licenseNumber?: string;
@@ -101,6 +101,7 @@ interface Chamber {
   lawyers?: Lawyer[];
 }
 
+
 export default function FindLawyersPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -129,33 +130,80 @@ export default function FindLawyersPage() {
       try {
         setLoading(true);
 
-        // Fetch all chambers
-        const { data: chambersData, error: chambersError } = await supabase
-          .from('chambers')
-          .select('*');
+        // Fetch everything in one go: Active lawyer memberships joined with their chamber and user/lawyer profiles
+        // We start from chamber_members as we know the client has read access there (as evidenced by logs)
+        // Fetch everything: Active lawyer memberships joined with their chamber and user/lawyer profiles
+        const { data: membershipData, error } = await supabase
+          .from('chamber_members')
+          .select(`
+            chamber_id,
+            chambers:chamber_id(*),
+            users:user_id!inner(
+              id,
+              full_name,
+              email,
+              phone,
+              avatar_url,
+              onboarding_completed,
+              role,
+              lawyer_profile:lawyers!inner(
+                bar_number,
+                specialization,
+                bio,
+                experience_years
+              )
+            )
+          `)
+          .eq('is_active', true);
 
-        if (chambersError) throw chambersError;
+        if (error) {
+          console.error('Fetch error:', error);
+          throw error;
+        }
 
-        // Fetch all active lawyers
-        const { data: lawyersData, error: lawyersError } = await supabase
-          .from('users')
-          .select('id, full_name, email, phone, avatar_url, bar_number, chamber_id, status, lawyer_profile')
-          .eq('role', 'lawyer')
-          .eq('status', 'active');
+        // Group the results by chamber
+        const chamberMap: Record<string, Chamber> = {};
 
-        if (lawyersError) throw lawyersError;
+        (membershipData || []).forEach((row: any) => {
+          const chamberData = row.chambers;
+          const user = row.users;
 
-        const typedLawyers = (lawyersData || []) as Lawyer[];
+          if (!chamberData || !user || user.role !== 'lawyer') return;
 
-        // Group lawyers by chamber
-        const chambersWithLawyers = (chambersData || []).map((chamber: any) => ({
-          ...chamber,
-          lawyers: typedLawyers.filter(l => l.chamber_id === chamber.id)
-        }));
+          if (!chamberMap[chamberData.id]) {
+            chamberMap[chamberData.id] = {
+              ...chamberData,
+              lawyers: []
+            };
+          }
 
-        setChambers(chambersWithLawyers);
+          // Transform 3NF data to UI format
+          const rawProfile = user.lawyer_profile?.[0];
+          const lawyer: Lawyer = {
+            id: user.id,
+            full_name: user.full_name || 'Anonymous',
+            email: user.email,
+            phone: user.phone,
+            avatar_url: user.avatar_url,
+            status: user.onboarding_completed ? 'active' : 'pending',
+            chamber_id: row.chamber_id,
+            lawyer_profile: rawProfile ? {
+              licenseNumber: rawProfile.bar_number,
+              practiceAreas: rawProfile.specialization ? rawProfile.specialization.split(',').map((s: string) => s.trim()) : [],
+              bio: rawProfile.bio,
+              experience_years: rawProfile.experience_years,
+              tagline: rawProfile.tagline || `${rawProfile.specialization?.split(',')[0] || 'Associate'} Attorney`
+            } : undefined
+          };
+
+          chamberMap[chamberData.id].lawyers?.push(lawyer);
+        });
+
+        const finalChambers = Object.values(chamberMap);
+        console.log('Final Chambers Data:', finalChambers);
+        setChambers(finalChambers);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error in fetchData:', error);
       } finally {
         setLoading(false);
       }
@@ -185,27 +233,28 @@ export default function FindLawyersPage() {
 
     setIsConnecting(true);
     try {
-      // 1. Get or create conversation
-      const { conversation, error: convError } = await getOrCreateConversation([user.id, selectedLawyer.id]);
-      if (convError || !conversation) throw convError || new Error('Failed to create conversation');
+      const response = await fetch('/api/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lawyerId: selectedLawyer.id,
+          chamberId: selectedLawyer.chamber_id,
+          message: connectionMessage,
+        }),
+      });
 
-      // 2. Send initial message
-      const { error: msgError } = await sendMessage(conversation.id, user.id, connectionMessage);
-      if (msgError) throw msgError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to connect');
+      }
 
-      // 3. Notify the lawyer
-      await sendNotification(
-        selectedLawyer.id,
-        'New Connection Request',
-        `${user.full_name || 'A client'} wants to connect with you regarding a potential case.`,
-        { threadId: conversation.id, type: 'connection_request' }
-      );
+      const data = await response.json();
 
       toast.success(`Connection request sent to ${selectedLawyer.full_name}`);
       setIsConnectModalOpen(false);
 
-      // Optionally redirect to messages
-      router.push('/dashboard/client/messages');
+      // Redirect to messages with the new thread selected
+      router.push(`/dashboard/client/messages?threadId=${data.threadId}`);
     } catch (error: any) {
       console.error('Connection error:', error);
       toast.error(error.message || 'Failed to connect with lawyer');
@@ -462,24 +511,13 @@ export default function FindLawyersPage() {
                                     </div>
                                     <div className="flex gap-2">
                                       <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openProfile(lawyer);
-                                        }}
-                                        className="h-8 rounded-xl bg-transparent text-slate-900 dark:text-white text-[9px] font-black uppercase tracking-widest px-3 border-slate-200 dark:border-slate-800 hover:bg-slate-50 transition-colors"
-                                      >
-                                        Profile
-                                      </Button>
-                                      <Button
                                         size="sm"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSelectedLawyer(lawyer);
                                           setIsConnectModalOpen(true);
                                         }}
-                                        className="h-8 rounded-xl bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-4 hover:bg-blue-600 transition-colors"
+                                        className="h-8 rounded-xl bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-4 hover:bg-blue-600 transition-all shadow-md active:scale-95"
                                       >
                                         Connect
                                       </Button>
@@ -591,23 +629,12 @@ export default function FindLawyersPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4" />
-                      ID: {viewingLawyer?.bar_number || 'Official Member'}
+                      ID: {viewingLawyer?.lawyer_profile?.licenseNumber || 'Official Member'}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-4 pb-2">
-                  <Button
-                    onClick={() => {
-                      setIsProfileModalOpen(false);
-                      setSelectedLawyer(viewingLawyer);
-                      setIsConnectModalOpen(true);
-                    }}
-                    className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 shadow-xl shadow-blue-500/20 transition-all hover:-translate-y-0.5"
-                  >
-                    Partner Now
-                  </Button>
-                </div>
+
               </div>
             </div>
           </div>

@@ -21,12 +21,19 @@ import { supabase } from '@/lib/supabase/client';
 import {
   getUserConversations,
   getConversationMessages,
-  sendMessage
+  sendMessage,
+  markThreadAsRead
 } from '@/lib/supabase/messages';
 import { toast } from 'sonner';
 
+import { useSearchParams } from 'next/navigation';
+import { subscribeToChannel } from '@/lib/realtime';
+
 export default function ClientMessagesPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const threadIdFromUrl = searchParams.get('threadId');
+
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -34,7 +41,15 @@ export default function ClientMessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [threadReads, setThreadReads] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle thread selection from URL on load
+  useEffect(() => {
+    if (threadIdFromUrl && !selectedThreadId) {
+      setSelectedThreadId(threadIdFromUrl);
+    }
+  }, [threadIdFromUrl]);
 
   // 1. Fetch Conversations
   const fetchConversations = async () => {
@@ -44,8 +59,6 @@ export default function ClientMessagesPage() {
       toast.error('Failed to load conversations');
     } else {
       setConversations(data || []);
-      // If no thread selected and we have threads, maybe select first? 
-      // Or keep it empty to show "Select a conversation".
     }
     setLoading(false);
   };
@@ -54,10 +67,11 @@ export default function ClientMessagesPage() {
     fetchConversations();
   }, [user]);
 
-  // 2. Realtime Subscription for Thread Updates (New threads / New messages in threads)
+  // 2. Realtime Subscription for Thread Updates
   useEffect(() => {
     if (!user) return;
 
+    // Listen for database changes to the thread list
     const channel = supabase
       .channel('threads_list_updates')
       .on(
@@ -66,10 +80,9 @@ export default function ClientMessagesPage() {
           event: '*',
           schema: 'public',
           table: 'message_threads',
-          filter: `participant_ids=cs.{${user.id}}` // 'cs' = contains
+          filter: `participant_ids=cs.{${user.id}}`
         },
         () => {
-          // simple: reload conversations to get updated 'updated_at' and sorting
           fetchConversations();
         }
       )
@@ -80,44 +93,81 @@ export default function ClientMessagesPage() {
     };
   }, [user]);
 
-  // 3. Load Messages for Selected Thread
+  // 3. Load Messages and Listen via Broadcast
   useEffect(() => {
     if (!selectedThreadId) return;
 
     const loadMessages = async () => {
-      const { messages: data, error } = await getConversationMessages(selectedThreadId);
+      const { messages: data, reads, error } = await getConversationMessages(selectedThreadId);
       if (error) {
         toast.error('Failed to load messages');
       } else {
-        // Reverse because getConversationMessages returns created_at desc (newest first), 
-        // but UI typically needs oldest at top (or we handle display order).
-        // Let's assume UI needs array ordered by time ascending.
         setMessages((data || []).reverse());
+        setThreadReads(reads || []);
       }
     };
 
     loadMessages();
 
-    // 4. Realtime Messages for Selected Active Thread
-    const channel = supabase
-      .channel(`thread_${selectedThreadId}`)
+    // Mark as read when thread is opened
+    if (user) {
+      markThreadAsRead(selectedThreadId, user.id);
+      // Clear unread count locally for immediate UI feedback
+      setConversations(prev => prev.map(c =>
+        c.id === selectedThreadId ? { ...c, unreadCount: 0 } : c
+      ));
+    }
+
+    // 4. Use Unified Broadcast for real-time messages
+    // This matches the 'thread-${threadId}' format used in the backend
+    const { unsubscribe } = subscribeToChannel(
+      `thread-${selectedThreadId}`,
+      'message',
+      (payload) => {
+        // Prevent duplicate messages if sender is same as current user (handled optimistically or by DB insert)
+        setMessages((prev) => {
+          if (prev.some(m => m.id === payload.id)) return prev;
+          return [...prev, payload];
+        });
+
+        // If thread is active, mark it as read immediately
+        if (user) {
+          markThreadAsRead(selectedThreadId, user.id);
+        }
+      }
+    );
+
+    // 5. Listen for 'Seen' status (thread_reads updates)
+    const readsChannel = supabase
+      .channel(`reads-${selectedThreadId}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
-          table: 'messages',
+          table: 'thread_reads',
           filter: `thread_id=eq.${selectedThreadId}`
         },
         (payload) => {
-          const newMsg = payload.new;
-          setMessages((prev) => [...prev, newMsg]);
+          const newData = payload.new as { user_id: string; last_read_at: string; thread_id: string };
+          if (!newData || !newData.user_id) return;
+
+          setThreadReads(prev => {
+            const index = prev.findIndex(r => r.user_id === newData.user_id);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = newData;
+              return updated;
+            }
+            return [...prev, newData];
+          });
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
+      supabase.removeChannel(readsChannel);
     };
   }, [selectedThreadId]);
 
@@ -229,9 +279,16 @@ export default function ClientMessagesPage() {
                             "font-black text-base leading-none uppercase italic tracking-tighter truncate",
                             isSelected ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
                           )}>{name}</h3>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            {new Date(conv.updated_at).toLocaleDateString()}
-                          </span>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                              {new Date(conv.updated_at).toLocaleDateString()}
+                            </span>
+                            {conv.unreadCount > 0 && !isSelected && (
+                              <Badge className="bg-blue-600 text-white border-none h-5 min-w-[20px] rounded-full flex items-center justify-center text-[10px] font-black px-1.5 animate-in zoom-in duration-300">
+                                {conv.unreadCount}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{role}</p>
                         <p className="text-xs text-slate-500 font-medium truncate mt-3 pr-4">
@@ -295,6 +352,13 @@ export default function ClientMessagesPage() {
 
                   {messages.map((msg) => {
                     const isOwn = msg.sender_id === user?.id;
+
+                    // Check if other participant has seen this message
+                    const otherParticipants = threadReads.filter(r => r.user_id !== user?.id);
+                    const isSeen = otherParticipants.length > 0 && otherParticipants.every(r =>
+                      new Date(r.last_read_at) >= new Date(msg.created_at)
+                    );
+
                     return (
                       <div key={msg.id} className={cn("flex flex-col gap-2 max-w-[70%]", isOwn ? "ml-auto items-end" : "items-start")}>
                         <div className={cn(
@@ -306,9 +370,16 @@ export default function ClientMessagesPage() {
                           {isOwn && <div className="absolute top-0 right-0 w-2 h-full bg-blue-600" />}
                           <p className="text-base font-medium leading-relaxed italic">{msg.content}</p>
                         </div>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-4">
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        <div className="flex items-center gap-2 px-4">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {isOwn && isSeen && (
+                            <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 italic flex items-center gap-1">
+                              <div className="w-1 h-1 rounded-full bg-blue-600" /> Seen
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

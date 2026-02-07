@@ -88,7 +88,7 @@ export default function LawyerOnboardingPage() {
 
                             if (data.session) {
                                 console.log('Session successfully set from recovery token!');
-                                window.history.replaceState({}, document.title, '/auth/onboarding');
+                                window.history.replaceState({}, document.title);
                                 checkProfile(data.session);
                                 return;
                             }

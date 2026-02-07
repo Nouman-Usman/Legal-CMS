@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -65,6 +65,10 @@ interface Case {
 export default function CasesPage() {
   const router = useRouter();
   const { user } = useAuth();
+  
+  // Get chamber ID from user's chambers array
+  const chamberId = user?.chambers?.[0]?.chamber_id;
+  
   const [cases, setCases] = useState<Case[]>([]);
   const [filteredCases, setFilteredCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,10 +100,39 @@ export default function CasesPage() {
     setIsEditing(false);
   };
 
-  // Fetch cases
-  // Fetch cases function
+  // Helper to enrich a single case with client/lawyer names
+  const enrichCase = useCallback(async (caseItem: any): Promise<Case> => {
+    let clientName = '';
+    let lawyerName = '';
+
+    if (caseItem.client_id) {
+      const { data: clientData } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('id', caseItem.client_id)
+        .single();
+      clientName = clientData?.full_name || 'Unknown';
+    }
+
+    if (caseItem.assigned_to) {
+      const { data: lawyerData } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('id', caseItem.assigned_to)
+        .single();
+      lawyerName = lawyerData?.full_name || 'Unassigned';
+    }
+
+    return {
+      ...caseItem,
+      client_name: clientName,
+      lawyer_name: lawyerName || 'Unassigned',
+    };
+  }, []);
+
+  // Fetch cases function (initial load only)
   const fetchCases = async () => {
-    if (!user?.chamber_id) {
+    if (!chamberId) {
       setLoading(false);
       return;
     }
@@ -109,42 +142,15 @@ export default function CasesPage() {
       const { data, error } = await supabase
         .from('cases')
         .select('*')
-        .eq('chamber_id', user.chamber_id)
+        .eq('chamber_id', chamberId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Enrich with client and lawyer names in parallel for performance
+      // Enrich with client and lawyer names in parallel
       const enrichedCases = await Promise.all(
-        (data || []).map(async (caseItem: any) => {
-          let clientName = '';
-          let lawyerName = '';
-
-          if (caseItem.client_id) {
-            const { data: clientData } = await supabase
-              .from('users')
-              .select('full_name')
-              .eq('id', caseItem.client_id)
-              .single();
-            clientName = clientData?.full_name || 'Unknown';
-          }
-
-          if (caseItem.assigned_to) {
-            const { data: lawyerData } = await supabase
-              .from('users')
-              .select('full_name')
-              .eq('id', caseItem.assigned_to)
-              .single();
-            lawyerName = lawyerData?.full_name || 'Unassigned';
-          }
-
-          return {
-            ...caseItem,
-            client_name: clientName,
-            lawyer_name: lawyerName || 'Unassigned',
-          };
-        })
+        (data || []).map(enrichCase)
       );
 
       setCases(enrichedCases);
@@ -157,32 +163,76 @@ export default function CasesPage() {
 
   useEffect(() => {
     fetchCases();
-  }, [user?.chamber_id]);
+  }, [chamberId]);
 
-  // Real-time subscription
+  // Real-time subscription with incremental updates (no loading state)
   useEffect(() => {
-    if (!user?.chamber_id) return;
+    if (!chamberId) return;
+
+    const handleRealtimeChange = async (payload: any) => {
+      const { eventType, new: newRecord, old: oldRecord } = payload;
+
+      if (eventType === 'INSERT' && newRecord) {
+        // Skip if deleted
+        if (newRecord.deleted_at) return;
+        // Enrich and add to the beginning
+        const enrichedCase = await enrichCase(newRecord);
+        setCases(prev => [enrichedCase, ...prev]);
+      } 
+      else if (eventType === 'UPDATE' && newRecord) {
+        // If soft-deleted, remove from list
+        if (newRecord.deleted_at) {
+          setCases(prev => prev.filter(c => c.id !== newRecord.id));
+          return;
+        }
+        // Enrich and update in place
+        const enrichedCase = await enrichCase(newRecord);
+        setCases(prev => prev.map(c => c.id === newRecord.id ? enrichedCase : c));
+      } 
+      else if (eventType === 'DELETE' && oldRecord) {
+        // Remove from list
+        setCases(prev => prev.filter(c => c.id !== oldRecord.id));
+      }
+    };
 
     const channel = supabase
-      .channel(`cases_updates_${user.chamber_id}`)
+      .channel(`cases_realtime_${chamberId}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'cases',
-          filter: `chamber_id=eq.${user.chamber_id}`
+          filter: `chamber_id=eq.${chamberId}`
         },
-        () => {
-          fetchCases();
-        }
+        (payload) => handleRealtimeChange({ ...payload, eventType: 'INSERT' })
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cases',
+          filter: `chamber_id=eq.${chamberId}`
+        },
+        (payload) => handleRealtimeChange({ ...payload, eventType: 'UPDATE' })
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'cases',
+          filter: `chamber_id=eq.${chamberId}`
+        },
+        (payload) => handleRealtimeChange({ ...payload, eventType: 'DELETE' })
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.chamber_id]);
+  }, [chamberId, enrichCase]);
 
   // Filter cases
   useEffect(() => {

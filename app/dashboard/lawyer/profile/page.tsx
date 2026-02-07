@@ -108,7 +108,7 @@ export default function LawyerProfilePage() {
             ...coreData,
             lawyer_profile: {
                 bio,
-                experience_years
+                experience_years: experience_years ? parseInt(experience_years.toString()) : 0
             }
         };
 
@@ -185,8 +185,8 @@ export default function LawyerProfilePage() {
                                     </div>
 
                                     <div>
-                                        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{user?.full_name}</h3>
-                                        <p className="text-sm font-medium text-slate-500 uppercase tracking-widest mt-1">Associate Attorney</p>
+                                        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{formData.full_name || user?.full_name}</h3>
+                                        <p className="text-sm font-medium text-slate-500 uppercase tracking-widest mt-1">{formData.specialization || 'Strategic Counselor'}</p>
                                     </div>
 
                                     <div className="w-full h-px bg-slate-100 dark:bg-slate-800 my-2" />
@@ -197,8 +197,12 @@ export default function LawyerProfilePage() {
                                             <span className="truncate">{user?.email}</span>
                                         </div>
                                         <div className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
-                                            <Shield className="w-4 h-4 text-emerald-500" />
-                                            <span>Lawyer Verified</span>
+                                            <Briefcase className="w-4 h-4 text-blue-500" />
+                                            <span className="truncate">Bar No: {formData.bar_number || 'Pending'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                            <Shield className={cn("w-4 h-4", (user as any)?.lawyer_profile?.license_verification_status === 'verified' ? "text-emerald-500" : "text-amber-500")} />
+                                            <span>{(user as any)?.lawyer_profile?.license_verification_status === 'verified' ? 'Lawyer Verified' : 'Verification Pending'}</span>
                                         </div>
                                     </div>
                                 </CardContent>

@@ -17,7 +17,7 @@ export async function GET() {
           getAll() {
             return cookieStore.getAll()
           },
-          setAll() {}, // Read-only for GET
+          setAll() { }, // Read-only for GET
         },
       }
     )
@@ -74,8 +74,8 @@ export async function GET() {
     return NextResponse.json({
       profile: {
         ...profile,
-        lawyerProfile: lawyerProfile || undefined,
-        clientProfile: clientProfile || undefined,
+        lawyer_profile: lawyerProfile || undefined,
+        client_profile: clientProfile || undefined,
         chambers: chambers || [],
       },
       exists: true,
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
           getAll() {
             return cookieStore.getAll()
           },
-          setAll() {},
+          setAll() { },
         },
       }
     )
@@ -137,6 +137,17 @@ export async function POST(request: Request) {
     if (upsertError) {
       console.error('Profile upsert error:', upsertError)
       return NextResponse.json({ error: upsertError.message }, { status: 500 })
+    }
+
+    // Initialize specialized profile if it doesn't exist
+    if (role === 'lawyer') {
+      await serviceSupabase
+        .from('lawyers')
+        .upsert({ user_id: user.id }, { onConflict: 'user_id' })
+    } else if (role === 'client') {
+      await serviceSupabase
+        .from('clients')
+        .upsert({ user_id: user.id }, { onConflict: 'user_id' })
     }
 
     return NextResponse.json({ profile, exists: true })

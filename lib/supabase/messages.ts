@@ -59,18 +59,44 @@ export async function getConversationMessages(
   offset = 0
 ) {
   try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const [messagesResponse, readsResponse] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('*')
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1),
+      supabase
+        .from('thread_reads')
+        .select('*')
+        .eq('thread_id', threadId)
+    ]);
 
-    if (error) throw error;
+    if (messagesResponse.error) throw messagesResponse.error;
+    if (readsResponse.error) throw readsResponse.error;
 
-    return { messages: data, error: null };
+    return {
+      messages: messagesResponse.data,
+      reads: readsResponse.data || [],
+      error: null
+    };
   } catch (error) {
-    return { messages: null, error };
+    return { messages: null, reads: [], error };
+  }
+}
+
+export async function getChamberThreadMessages(threadId: string) {
+  try {
+    const res = await fetch(`/api/chambers/conversations/${threadId}/messages`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to fetch messages');
+    }
+    const { messages, reads } = await res.json();
+    return { messages, reads, error: null };
+  } catch (error) {
+    console.error('getChamberThreadMessages error:', error);
+    return { messages: null, reads: [], error };
   }
 }
 
@@ -217,6 +243,24 @@ export async function getUserProfile(userId: string) {
   return { user: data, error };
 }
 
+export async function markThreadAsRead(threadId: string, userId: string) {
+  try {
+    const { error } = await supabase
+      .from('thread_reads')
+      .upsert({
+        thread_id: threadId,
+        user_id: userId,
+        last_read_at: new Date().toISOString()
+      }, { onConflict: 'thread_id,user_id' });
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('Error marking thread as read:', error);
+    return { error };
+  }
+}
+
 export async function getUserConversations(userId: string) {
   try {
     // 1. Get threads where user is a participant
@@ -230,30 +274,58 @@ export async function getUserConversations(userId: string) {
 
     if (!threads || threads.length === 0) return { conversations: [], error: null };
 
-    // 2. Get unique participant IDs
+    // 2. Get unique participant IDs and thread IDs
     const allParticipantIds = Array.from(
       new Set(threads.flatMap((t: any) => t.participant_ids))
     );
+    const threadIds = threads.map((t: any) => t.id);
 
-    // 3. Fetch user profiles for these participants
-    const { data: users, error: usersError } = await supabase
-      .from('users')
-      .select('id, full_name, role, avatar_url')
-      .in('id', allParticipantIds);
+    // 3. Fetch read status and user profiles in parallel
+    const [readsResponse, usersResponse] = await Promise.all([
+      supabase
+        .from('thread_reads')
+        .select('*')
+        .eq('user_id', userId)
+        .in('thread_id', threadIds),
+      supabase
+        .from('users')
+        .select('id, full_name, role, avatar_url')
+        .in('id', allParticipantIds)
+    ]);
 
-    if (usersError) throw usersError;
+    if (readsResponse.error) throw readsResponse.error;
+    if (usersResponse.error) throw usersResponse.error;
 
-    // 4. Map threads to a richer format including the "other" participant
-    const conversations = threads.map((thread: any) => {
+    const reads = readsResponse.data || [];
+    const users = usersResponse.data || [];
+
+    // 4. Fetch unread counts for each thread
+    // We do this by getting the count of messages created after last_read_at
+    const conversations = await Promise.all(threads.map(async (thread: any) => {
       const otherId = thread.participant_ids.find((id: string) => id !== userId) || thread.participant_ids[0];
       const otherUser = users?.find(u => u.id === otherId);
+      const userRead = reads.find(r => r.thread_id === thread.id);
+
+      const lastReadAt = userRead?.last_read_at || new Date(0).toISOString();
+
+      // Get unread count
+      const { count, error: countError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id)
+        .neq('sender_id', userId)
+        .gt('created_at', lastReadAt);
+
+      if (countError) console.warn('Unread count fetch error:', countError);
 
       return {
         ...thread,
         otherUser,
+        unreadCount: count || 0,
+        lastReadAt,
         participants: users?.filter(u => thread.participant_ids.includes(u.id))
       };
-    });
+    }));
 
     return { conversations, error: null };
   } catch (error) {
@@ -264,51 +336,12 @@ export async function getUserConversations(userId: string) {
 
 export async function getChamberConversations(adminId: string) {
   try {
-    // 1. Get ALL threads visible to this user (RLS handles the filtering for chamber admins)
-    const { data: threads, error: threadsError } = await supabase
-      .from('message_threads')
-      .select('*')
-      .order('updated_at', { ascending: false });
-
-    if (threadsError) throw threadsError;
-
-    if (!threads || threads.length === 0) return { conversations: [], error: null };
-
-    // 2. Get unique participant IDs
-    const allParticipantIds = Array.from(
-      new Set(threads.flatMap((t: any) => t.participant_ids))
-    );
-
-    // 3. Fetch user profiles for these participants
-    const { data: users, error: usersError } = await supabase
-      .from('users')
-      .select('id, full_name, role, avatar_url')
-      .in('id', allParticipantIds);
-
-    if (usersError) throw usersError;
-
-    // 4. Map threads to a richer format
-    // For admin view, "otherUser" is ambiguous as they are overseeing other people's chats.
-    // We should probably expose BOTH participants clearly.
-    // But for compatibility with the UI (which expects otherUser), we might pick one?
-    // Or we provide 'participants' fully and UI handles it.
-
-    const conversations = threads.map((thread: any) => {
-      // For oversight, we might want to label the conversation "Client X & Lawyer Y"
-      // Let's attach all participants.
-      const participants = users?.filter(u => thread.participant_ids.includes(u.id)) || [];
-
-      // We can mock 'otherUser' as the first participant for basic UI list compatibility
-      // But the UI should probably be smarter.
-      const otherUser = participants[0];
-
-      return {
-        ...thread,
-        otherUser, // Legacy/prop calc
-        participants
-      };
-    });
-
+    const res = await fetch('/api/chambers/conversations');
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to fetch conversations');
+    }
+    const { conversations } = await res.json();
     return { conversations, error: null };
   } catch (error) {
     console.error('getChamberConversations error:', error);

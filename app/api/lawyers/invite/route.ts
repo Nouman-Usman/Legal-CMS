@@ -45,10 +45,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (!chamber_id) {
+            return NextResponse.json(
+                { error: 'Chamber ID is required' },
+                { status: 400 }
+            );
+        }
+
         // Check if user already exists
         const { data: existingUser, error: checkError } = await supabaseAdmin
             .from('users')
-            .select('id, chamber_id')
+            .select('id, role')
             .eq('email', email)
             .single();
 
@@ -58,44 +65,52 @@ export async function POST(request: NextRequest) {
         }
 
         if (existingUser) {
-            // User exists - check if they're already in a chamber
-            if (existingUser.chamber_id) {
+            // Check if already a member of this chamber
+            const { data: existingMembership } = await supabaseAdmin
+                .from('chamber_members')
+                .select('id')
+                .eq('user_id', existingUser.id)
+                .eq('chamber_id', chamber_id)
+                .single();
+
+            if (existingMembership) {
                 return NextResponse.json(
-                    { error: 'This lawyer is already associated with a chamber' },
+                    { error: 'This user is already a member of this chamber' },
                     { status: 400 }
                 );
             }
 
-            // Update existing user to join this chamber
-            const { error: updateError } = await supabaseAdmin
-                .from('users')
-                .update({
+            // Add existing user to chamber
+            const { error: memberError } = await supabaseAdmin
+                .from('chamber_members')
+                .insert({
+                    user_id: existingUser.id,
                     chamber_id,
-                    phone,
-                    specialization,
-                    bar_number,
-                    role: 'lawyer',
-                    status: 'active'
-                })
-                .eq('id', existingUser.id);
+                    role: 'member',
+                    is_active: true
+                });
 
-            if (updateError) {
-                console.error('Database update error:', updateError);
-                throw updateError;
+            if (memberError) {
+                console.error('Chamber member insert error:', memberError);
+                throw memberError;
             }
 
-            // Send invitation email (via password reset) for existing user
-            const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
+            // Create or update lawyer profile if needed
+            if (existingUser.role === 'lawyer' && (specialization || bar_number)) {
+                await supabaseAdmin
+                    .from('lawyers')
+                    .upsert({
+                        user_id: existingUser.id,
+                        specialization,
+                        bar_number
+                    }, { onConflict: 'user_id' });
+            }
 
-            // We use the supabaseAdmin client but call resetPasswordForEmail
-            // Note: This sends a "Reset Password" email, which acts as the invitation/setup link
-            const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+            // Send invitation email for existing user
+            const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
+            await supabaseAdmin.auth.resetPasswordForEmail(email, {
                 redirectTo: redirectUrl
             });
-
-            if (emailError) {
-                console.warn('Failed to send invitation email to existing user:', emailError);
-            }
 
             return NextResponse.json({
                 success: true,
@@ -104,11 +119,9 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Create a new user and send them an invitation email
-        // Direct to onboarding page to handle client-side hash (Implicit Flow)
-        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
+        // Create a new user and send invitation email
+        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/`;
 
-        // Use inviteUserByEmail which sends the email automatically
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
             email,
             {
@@ -123,7 +136,6 @@ export async function POST(request: NextRequest) {
         if (authError) {
             console.error('Auth invite error:', authError);
             if (authError.message.includes('already been registered')) {
-                // Should have been caught by existingUser check, but just in case
                 return NextResponse.json(
                     { error: 'An account with this email already exists.' },
                     { status: 400 }
@@ -136,7 +148,7 @@ export async function POST(request: NextRequest) {
             throw new Error('Failed to create user');
         }
 
-        // Create or update the user profile
+        // Create user profile in users table
         const { error: profileError } = await supabaseAdmin
             .from('users')
             .upsert({
@@ -144,20 +156,44 @@ export async function POST(request: NextRequest) {
                 email,
                 full_name,
                 role: 'lawyer',
-                chamber_id,
-                phone,
-                specialization,
-                bar_number,
-                status: 'pending'
+                phone
             });
 
         if (profileError) {
             console.error('Profile create error:', profileError);
-            // Don't rollback auth user as the email is already sent
             throw profileError;
         }
 
-        console.log(`User invited successfully: ${email}`);
+        // Create lawyer profile
+        const { error: lawyerError } = await supabaseAdmin
+            .from('lawyers')
+            .insert({
+                user_id: authData.user.id,
+                specialization,
+                bar_number
+            });
+
+        if (lawyerError) {
+            console.error('Lawyer profile create error:', lawyerError);
+            // Continue anyway, not critical
+        }
+
+        // Create chamber membership
+        const { error: memberError } = await supabaseAdmin
+            .from('chamber_members')
+            .insert({
+                user_id: authData.user.id,
+                chamber_id,
+                role: 'member',
+                is_active: true
+            });
+
+        if (memberError) {
+            console.error('Chamber member create error:', memberError);
+            throw memberError;
+        }
+
+        console.log(`Lawyer invited successfully: ${email}`);
 
         return NextResponse.json({
             success: true,
@@ -186,16 +222,50 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        // Query chamber_members joined with users and lawyers tables
         const { data, error } = await supabaseAdmin
-            .from('users')
-            .select('*')
-            .eq('role', 'lawyer')
+            .from('chamber_members')
+            .select(`
+                id,
+                user_id,
+                role,
+                is_active,
+                joined_at,
+                users:user_id (
+                    id,
+                    email,
+                    full_name,
+                    phone,
+                    role,
+                    created_at,
+                    lawyer_profile:lawyers (
+                        specialization,
+                        bar_number
+                    )
+                )
+            `)
             .eq('chamber_id', chamber_id)
-            .order('created_at', { ascending: false });
+            .order('joined_at', { ascending: false });
 
         if (error) throw error;
 
-        return NextResponse.json({ lawyers: data });
+        // Transform data to match expected format
+        const lawyers = (data || [])
+            .filter((member: any) => member.users?.role === 'lawyer')
+            .map((member: any) => ({
+                id: member.users.id,
+                member_id: member.id,
+                email: member.users.email,
+                full_name: member.users.full_name || 'Unknown',
+                phone: member.users.phone,
+                specialization: member.users.lawyer_profile?.[0]?.specialization,
+                bar_number: member.users.lawyer_profile?.[0]?.bar_number,
+                status: member.is_active ? 'active' : 'inactive',
+                is_active: member.is_active,
+                created_at: member.users.created_at,
+            }));
+
+        return NextResponse.json({ lawyers });
 
     } catch (error: any) {
         console.error('Error fetching lawyers:', error);

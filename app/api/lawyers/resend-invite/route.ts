@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Send invitation email (using reset password flow as it acts as magic link)
-        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
+        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/`;
 
         const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
             redirectTo: redirectUrl

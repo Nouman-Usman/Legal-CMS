@@ -35,6 +35,10 @@ interface ChamberFormData {
     logo_url?: string;
 }
 
+const CHAMBER_ONBOARDING_NAMESPACE = 'chamberOnboardingCompleted';
+const getChamberOnboardingKey = (userId?: string) =>
+    userId ? `${CHAMBER_ONBOARDING_NAMESPACE}:${userId}` : null;
+
 export default function ChamberSetupPage() {
     const router = useRouter();
     const { user, loading: authLoading, userRole, refreshProfile } = useAuth();
@@ -59,26 +63,38 @@ export default function ChamberSetupPage() {
     });
 
     useEffect(() => {
-        // If not authenticated, redirect to login
-        if (!authLoading && !user) {
+        if (authLoading) {
+            return;
+        }
+
+        if (!user) {
             router.push('/auth/login');
             return;
         }
 
-        // If not a chamber admin, redirect to main dashboard
-        if (!authLoading && user && userRole !== 'chamber_admin') {
+        if (userRole !== 'chamber_admin') {
             router.push('/dashboard');
             return;
         }
 
-        // If user already has active chamber membership, redirect to dashboard
-        if (!authLoading && user && user.chambers && user.chambers.length > 0) {
+        const localKey = getChamberOnboardingKey(user.id);
+        const canUseLocalStorage = typeof window !== 'undefined';
+        const localComplete = localKey && canUseLocalStorage
+            ? localStorage.getItem(localKey) === 'true'
+            : false;
+
+        const dbComplete = Boolean(user.onboarding_completed || user.user_metadata?.onboarding_completed);
+        if (dbComplete && localKey && canUseLocalStorage) {
+            localStorage.setItem(localKey, 'true');
+        }
+
+        const hasChambers = Boolean(user.chambers?.length);
+        if (localComplete || dbComplete || hasChambers) {
             router.push('/dashboard/chambers-admin');
             return;
         }
 
-        // Pre-fill email with user's email
-        if (user?.email && !chamber.email) {
+        if (user.email && !chamber.email) {
             setChamber(prev => ({ ...prev, email: user.email || '' }));
         }
     }, [user, authLoading, userRole, router, chamber.email]);
@@ -157,6 +173,10 @@ export default function ChamberSetupPage() {
             }
 
             setSuccess(true);
+            const localKey = getChamberOnboardingKey(user?.id);
+            if (localKey && typeof window !== 'undefined') {
+                localStorage.setItem(localKey, 'true');
+            }
             
             // Refresh profile to get updated chambers data
             await refreshProfile();

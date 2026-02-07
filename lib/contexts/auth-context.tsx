@@ -8,15 +8,18 @@ export type UserRole = 'chamber_admin' | 'lawyer' | 'client';
 
 export interface UserProfile extends User {
   role: UserRole;
+  onboarding_completed?: boolean;
   full_name: string;
-  lawyerProfile?: {
+  chamber_id?: string; // Legacy/convenience property for primary chamber
+  lawyer_profile?: {
     id: string;
     bar_number?: string;
     specialization?: string;
     bio?: string;
     experience_years?: number;
+    license_verification_status?: string;
   };
-  clientProfile?: {
+  client_profile?: {
     id: string;
     company_name?: string;
     contact_person?: string;
@@ -43,11 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileFetchLock = React.useRef<string | null>(null);
+  const lastFetchedUserId = React.useRef<string | null>(null);
 
   // Helper to fetch or create profile via server-side API (bypasses RLS)
   const getProfileWithRetry = async (currentUser: User) => {
     try {
-      console.log('Fetching profile for:', currentUser.id);
 
       // Use server-side API route which uses service_role key (bypasses RLS)
       const fetchRes = await fetch('/api/profile', {
@@ -59,15 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fetchRes.ok) {
         const data = await fetchRes.json();
         if (data.exists && data.profile) {
-          console.log('Profile found via API:', data.profile.email);
           return data.profile;
         }
       } else {
         console.error('Profile API fetch failed:', fetchRes.status, await fetchRes.text().catch(() => ''));
       }
-
-      // Profile doesn't exist - create it via server API
-      console.log('Profile missing. Creating profile via API...');
 
       const validRoles: UserRole[] = ['chamber_admin', 'lawyer', 'client'];
       const metadataRole = currentUser.user_metadata?.role;
@@ -86,15 +86,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (createRes.ok) {
         const createData = await createRes.json();
         if (createData.profile) {
-          console.log('Profile created successfully via API:', createData.profile.email);
           return createData.profile;
         }
       } else {
         console.error('Profile API create failed:', createRes.status, await createRes.text().catch(() => ''));
       }
-
-      // Final fallback: try direct Supabase client (in case API route has issues)
-      console.log('API route failed, trying direct Supabase client...');
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
@@ -116,14 +112,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const handleUserSession = async (currentUser: User, forceFetch = false) => {
+    // 1. Avoid redundant fetches for same user
+    if (!forceFetch && lastFetchedUserId.current === currentUser.id && user) {
+      return;
+    }
+
+    // 2. Atomic lock to prevent parallel fetches
+    if (profileFetchLock.current === currentUser.id) return;
+    profileFetchLock.current = currentUser.id;
+
+    try {
+      // Try local storage cache first for speed
+      const cacheKey = `auth_profile_${currentUser.id}`;
+      const cached = typeof window !== 'undefined' ? sessionStorage.getItem(cacheKey) : null;
+
+      if (!forceFetch && cached) {
+        const cachedProfile = JSON.parse(cached);
+        setUser({
+          ...currentUser,
+          ...cachedProfile,
+          chamber_id: cachedProfile.chambers?.[0]?.chamber_id || cachedProfile.chamber_id
+        } as UserProfile);
+        setLoading(false);
+        // Still fetch in background to sync
+      }
+
+      const profile = await getProfileWithRetry(currentUser);
+
+      if (profile) {
+        lastFetchedUserId.current = currentUser.id;
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(cacheKey, JSON.stringify(profile));
+        }
+        setUser({
+          ...currentUser,
+          ...profile,
+          chamber_id: profile.chambers?.[0]?.chamber_id
+        } as UserProfile);
+      } else {
+        // Fallback to metadata
+        const validRoles: UserRole[] = ['chamber_admin', 'lawyer', 'client'];
+        const metadataRole = currentUser.user_metadata?.role;
+        const role: UserRole = validRoles.includes(metadataRole) ? metadataRole : 'client';
+
+        setUser({
+          ...currentUser,
+          role: role,
+          full_name: currentUser.user_metadata?.full_name || currentUser.email || '',
+        } as UserProfile);
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('Error in handleUserSession:', err);
+      setLoading(false);
+    } finally {
+      profileFetchLock.current = null;
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    console.log('AuthProvider mounted');
 
     // Global safety valve: force loading=false after 6s no matter what
     const globalTimeout = setTimeout(() => {
       if (isMounted && loading) {
-        console.warn('Global auth timeout - forcing loading=false');
         setLoading(false);
       }
     }, 6000);
@@ -132,21 +185,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // 1. Check for recovery token in hash (from email invitation links)
         const hash = typeof window !== 'undefined' ? window.location.hash : '';
-        console.log('Hash on init:', hash ? `present (${hash.length} chars)` : 'empty');
 
         if (hash && hash.includes('access_token')) {
-          console.log('Processing recovery token from hash...');
 
           const hashParams = new URLSearchParams(hash.substring(1));
           const accessToken = hashParams.get('access_token');
           const refreshToken = hashParams.get('refresh_token');
           const type = hashParams.get('type');
 
-          console.log('Token type:', type);
-
           if (accessToken && (type === 'recovery' || type === 'magiclink')) {
             try {
-              console.log('Calling setSession with recovery token...');
               const { data, error: setSessionError } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken || '',
@@ -155,10 +203,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (setSessionError) {
                 console.error('setSession error:', setSessionError);
               } else if (data.session) {
-                console.log('Recovery session set successfully!');
                 if (isMounted) {
                   window.history.replaceState({}, document.title, window.location.pathname);
-                  await handleUserSession(data.session.user);
+                  // onAuthStateChange will handle handleUserSession
                   return;
                 }
               }
@@ -168,58 +215,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // 2. Check session immediately
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('Initial getSession result:', session?.user?.id, error);
+        // 2. Initial state - just check if we have a session to set initial loading state
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (isMounted) {
-          if (session?.user) {
-            await handleUserSession(session.user);
-          } else {
-            setLoading(false);
-          }
+        if (isMounted && !session) {
+          setLoading(false);
         }
+        // onAuthStateChange handles the rest
       } catch (err) {
         console.error('Initial session check failed:', err);
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    const handleUserSession = async (currentUser: User) => {
-      try {
-        // Wrap profile fetch with timeout
-        const profilePromise = getProfileWithRetry(currentUser);
-        const timeoutPromise = new Promise<null>((resolve) => {
-          setTimeout(() => {
-            console.warn('Profile fetch timed out after 4s');
-            resolve(null);
-          }, 4000);
-        });
-
-        const profile = await Promise.race([profilePromise, timeoutPromise]);
-
-        if (!isMounted) return;
-
-        if (profile) {
-          setUser({
-            ...currentUser,
-            ...profile,
-          } as UserProfile);
-        } else {
-          // Fallback to metadata
-          const validRoles: UserRole[] = ['chamber_admin', 'lawyer', 'client'];
-          const metadataRole = currentUser.user_metadata?.role;
-          const role: UserRole = validRoles.includes(metadataRole) ? metadataRole : 'client';
-
-          setUser({
-            ...currentUser,
-            role: role,
-            full_name: currentUser.user_metadata?.full_name || currentUser.email || '',
-          } as UserProfile);
-        }
-        setLoading(false);
-      } catch (err) {
-        console.error('Error in handleUserSession:', err);
         if (isMounted) setLoading(false);
       }
     };
@@ -227,13 +231,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 2. Set up listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('AuthStateChange:', event, session?.user?.id);
         if (!isMounted) return;
 
         if (session?.user) {
-          // If we already have the same user loaded, don't re-fetch profile unless it's a specific event
-          // checking user.id against session.user.id would require valid closure or ref
-          await handleUserSession(session.user);
+          // Only fetch on sign-in or session-start
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || !user) {
+            await handleUserSession(session.user);
+          }
         } else {
           setUser(null);
           setLoading(false);
@@ -249,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(globalTimeout);
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   // Session monitoring - check and refresh tokens proactively
   useEffect(() => {
@@ -264,13 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // If session expires in less than 10 minutes, refresh it
           if (expiresIn < 600) {
-            console.log('Proactively refreshing session...');
             const { data, error } = await supabase.auth.refreshSession();
-            if (error) {
-              console.error('Session refresh error:', error);
-            } else {
-              console.log('Session refreshed successfully');
-            }
           }
         }
       } catch (error) {
@@ -293,13 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser) {
-      const profile = await getProfileWithRetry(authUser);
-      if (profile) {
-        setUser({
-          ...authUser,
-          ...profile,
-        } as UserProfile);
-      }
+      await handleUserSession(authUser, true);
     }
   };
 

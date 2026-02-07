@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
@@ -41,7 +41,7 @@ import {
 import { cn } from '@/lib/utils';
 
 interface Lawyer {
-  id: string;
+  id: string;          // user id
   email: string;
   full_name: string;
   phone?: string;
@@ -49,10 +49,16 @@ interface Lawyer {
   bar_number?: string;
   status: 'active' | 'inactive' | 'pending';
   created_at: string;
+  member_id?: string;  // chamber_members id
+  is_active?: boolean; // from chamber_members
 }
 
 export default function LawyersPage() {
   const { user } = useAuth();
+
+  // Get chamber ID from user's chambers array
+  const chamberId = user?.chambers?.[0]?.chamber_id;
+
   const [lawyers, setLawyers] = useState<Lawyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,52 +87,139 @@ export default function LawyersPage() {
 
   useEffect(() => {
     fetchLawyers();
-  }, [user]);
+  }, [chamberId]);
 
-  // Auto-refresh when lawyers are updated via status changes
+  // Real-time subscription for chamber_members changes
   useEffect(() => {
-    if (!user?.chamber_id) return;
+    if (!chamberId) return;
 
+    // Since we need to join with users/lawyers tables, refetch on any change
     const channel = supabase
-      .channel('lawyers-changes')
+      .channel(`lawyers_realtime_${chamberId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'users',
-          filter: `chamber_id=eq.${user.chamber_id}`,
+          table: 'chamber_members',
+          filter: `chamber_id=eq.${chamberId}`,
         },
         () => {
-          fetchLawyers();
+          // Refetch lawyers (without loading state for smooth UX)
+          fetchLawyersQuiet();
         }
       )
-      .subscribe((status) => {
-        console.log('Lawyers Realtime Status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.chamber_id]);
+  }, [chamberId]);
+
+  // Quiet fetch without loading state (for realtime updates)
+  const fetchLawyersQuiet = async () => {
+    if (!user || !chamberId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('chamber_members')
+        .select(`
+          id,
+          user_id,
+          role,
+          is_active,
+          joined_at,
+          users:user_id (
+            id,
+            email,
+            full_name,
+            phone,
+            role,
+            created_at,
+            lawyer_profile:lawyers (
+              specialization,
+              bar_number
+            )
+          )
+        `)
+        .eq('chamber_id', chamberId)
+        .order('joined_at', { ascending: false });
+
+      if (error) throw error;
+
+      const lawyersData: Lawyer[] = (data || [])
+        .filter((member: any) => member.users?.role === 'lawyer')
+        .map((member: any) => ({
+          id: member.users.id,
+          member_id: member.id,
+          email: member.users.email,
+          full_name: member.users.full_name || 'Unknown',
+          phone: member.users.phone,
+          specialization: member.users.lawyer_profile?.[0]?.specialization,
+          bar_number: member.users.lawyer_profile?.[0]?.bar_number,
+          status: member.is_active ? 'active' : 'inactive',
+          is_active: member.is_active,
+          created_at: member.users.created_at,
+        }));
+
+      setLawyers(lawyersData);
+    } catch (err) {
+      console.error('Error fetching lawyers:', err);
+    }
+  };
 
   const fetchLawyers = async () => {
-    if (!user || !user.chamber_id) {
+    if (!user || !chamberId) {
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
+      // Query chamber_members to get lawyers in this chamber, joining with users and lawyers tables
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'lawyer')
-        .eq('chamber_id', user.chamber_id)
-        .order('created_at', { ascending: false });
+        .from('chamber_members')
+        .select(`
+          id,
+          user_id,
+          role,
+          is_active,
+          joined_at,
+          users:user_id (
+            id,
+            email,
+            full_name,
+            phone,
+            role,
+            created_at,
+            lawyer_profile:lawyers (
+              specialization,
+              bar_number
+            )
+          )
+        `)
+        .eq('chamber_id', chamberId)
+        .order('joined_at', { ascending: false });
 
       if (error) throw error;
-      setLawyers(data || []);
+
+      // Transform data to match Lawyer interface
+      const lawyersData: Lawyer[] = (data || [])
+        .filter((member: any) => member.users?.role === 'lawyer')
+        .map((member: any) => ({
+          id: member.users.id,
+          member_id: member.id,
+          email: member.users.email,
+          full_name: member.users.full_name || 'Unknown',
+          phone: member.users.phone,
+          specialization: member.users.lawyer_profile?.[0]?.specialization,
+          bar_number: member.users.lawyer_profile?.[0]?.bar_number,
+          status: member.is_active ? 'active' : 'inactive',
+          is_active: member.is_active,
+          created_at: member.users.created_at,
+        }));
+
+      setLawyers(lawyersData);
     } catch (err) {
       console.error('Error fetching lawyers:', err);
     } finally {
@@ -144,7 +237,7 @@ export default function LawyersPage() {
       const response = await fetch('/api/lawyers/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newLawyer, chamber_id: user?.chamber_id }),
+        body: JSON.stringify({ ...newLawyer, chamber_id: chamberId }),
       });
 
       const result = await response.json();
@@ -171,17 +264,28 @@ export default function LawyersPage() {
     setUpdatingLawyer(true);
 
     try {
-      const { error } = await supabase
+      // 1. Update basic user info
+      const { error: userError } = await supabase
         .from('users')
         .update({
           full_name: editingLawyer.full_name,
           phone: editingLawyer.phone,
-          specialization: editingLawyer.specialization,
-          bar_number: editingLawyer.bar_number,
         })
         .eq('id', editingLawyer.id);
 
-      if (error) throw error;
+      if (userError) throw userError;
+
+      // 2. Update/Upsert lawyer-specific info
+      const { error: lawyerError } = await supabase
+        .from('lawyers')
+        .upsert({
+          user_id: editingLawyer.id,
+          specialization: editingLawyer.specialization,
+          bar_number: editingLawyer.bar_number,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (lawyerError) throw lawyerError;
 
       setSuccess('Lawyer updated successfully');
       setLawyers(prev => prev.map(l => l.id === editingLawyer.id ? editingLawyer : l));
@@ -224,7 +328,7 @@ export default function LawyersPage() {
       const response = await fetch(`/api/lawyers/${lawyerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, chamber_id: chamberId }),
       });
 
       const result = await response.json();
@@ -241,7 +345,7 @@ export default function LawyersPage() {
     if (!confirm('Are you sure you want to remove this lawyer from your chamber?')) return;
 
     try {
-      const response = await fetch(`/api/lawyers/${lawyerId}`, {
+      const response = await fetch(`/api/lawyers/${lawyerId}?chamber_id=${chamberId || ''}`, {
         method: 'DELETE',
       });
 

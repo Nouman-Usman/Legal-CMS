@@ -29,7 +29,8 @@ import {
     XCircle,
     UserPlus,
     Calendar,
-    Sparkles
+    Sparkles,
+    MessageSquare
 } from 'lucide-react';
 import {
     DropdownMenu,
@@ -52,14 +53,16 @@ export default function LeadsPage() {
     const fetchLeads = async () => {
         if (!user) return;
 
-        if (!user.chamber_id) {
-            console.warn('User has no chamber_id, cannot fetch leads');
+        const activeChamberId = user.chambers?.[0]?.chamber_id;
+
+        if (!activeChamberId) {
+            console.warn('User has no active chamber, cannot fetch leads');
             setLoading(false);
             return;
         }
 
         setLoading(true);
-        const { leads: data, error } = await getLeads(user.chamber_id);
+        const { leads: data, error } = await getLeads(activeChamberId);
         if (!error && data) {
             setLeads(data);
         }
@@ -72,18 +75,20 @@ export default function LeadsPage() {
 
     // Realtime subscription for leads updates
     useEffect(() => {
-        if (!user?.chamber_id) return;
+        if (!user) return;
+        const activeChamberId = user.chambers?.[0]?.chamber_id;
+        if (!activeChamberId) return;
 
         console.log('Setting up realtime subscription for leads');
         const channel = supabase
-            .channel(`leads_updates_${user.chamber_id}`)
+            .channel(`leads_updates_${activeChamberId}`)
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
                     table: 'leads',
-                    filter: `chamber_id=eq.${user.chamber_id}`
+                    filter: `chamber_id=eq.${activeChamberId}`
                 },
                 (payload) => {
                     console.log('Realtime lead update received:', payload);
@@ -96,7 +101,7 @@ export default function LeadsPage() {
             console.log('Cleaning up realtime subscription for leads');
             supabase.removeChannel(channel);
         };
-    }, [user?.chamber_id]);
+    }, [user?.chambers]);
 
     const handleStatusUpdate = async (id: string, status: Lead['status']) => {
         setLeads(leads.map(l => l.id === id ? { ...l, status } : l));
@@ -123,7 +128,8 @@ export default function LeadsPage() {
 
     const filteredLeads = leads.filter(lead => {
         const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            lead.email?.toLowerCase().includes(searchQuery.toLowerCase());
+            lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            lead.assignee?.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
@@ -277,8 +283,8 @@ export default function LeadsPage() {
                                                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">{lead.email || 'NO EMAIL'}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2.5">
-                                                            <Phone className="w-4 h-4 text-slate-400" />
-                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">{lead.phone || 'NO PHONE'}</span>
+                                                            <Users className="w-4 h-4 text-blue-600" />
+                                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic font-bold">Assigned: {lead.assignee?.full_name || 'PENDING'}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2.5">
                                                             <ArrowUpRight className="w-4 h-4 text-blue-600" />
@@ -289,6 +295,13 @@ export default function LeadsPage() {
                                             </div>
 
                                             <div className="flex items-center gap-6 mt-10 md:mt-0 pt-8 md:pt-0 border-t md:border-t-0 border-slate-50">
+                                                <Button
+                                                    onClick={() => window.location.href = `/dashboard/chambers-admin/messages`}
+                                                    variant="outline"
+                                                    className="rounded-[24px] h-14 px-8 border-2 border-slate-100 dark:border-slate-800 hover:bg-slate-900 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all group-hover:scale-105 gap-2"
+                                                >
+                                                    Open Intelligence Stream <MessageSquare className="w-4 h-4" />
+                                                </Button>
                                                 <div className="flex gap-2">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
