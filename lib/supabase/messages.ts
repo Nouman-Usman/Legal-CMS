@@ -134,6 +134,13 @@ export async function getOrCreateConversation(
 
     if (createError) throw createError;
 
+    // 2.5 New: Sync lead for this new thread (Fire and forget from client side)
+    fetch('/api/leads/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: newThread.id })
+    }).catch(err => console.warn('Lead sync failed:', err));
+
     // 3. Keep thread_reads in sync for legacy compatibility and read tracking
     const readEntries = participantIds.map(userId => ({
       thread_id: newThread.id,
@@ -244,6 +251,11 @@ export async function getUserProfile(userId: string) {
 }
 
 export async function markThreadAsRead(threadId: string, userId: string) {
+  if (!threadId || !userId || threadId === 'null' || userId === 'null') {
+    console.warn('markThreadAsRead: Invalid inputs', { threadId, userId });
+    return { error: new Error('Invalid inputs') };
+  }
+
   try {
     const { error } = await supabase
       .from('thread_reads')
@@ -251,12 +263,22 @@ export async function markThreadAsRead(threadId: string, userId: string) {
         thread_id: threadId,
         user_id: userId,
         last_read_at: new Date().toISOString()
-      }, { onConflict: 'thread_id,user_id' });
+      }, {
+        onConflict: 'thread_id,user_id',
+        ignoreDuplicates: false
+      });
 
     if (error) throw error;
     return { error: null };
-  } catch (error) {
-    console.error('Error marking thread as read:', error);
+  } catch (error: any) {
+    console.error('Error marking thread as read:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      threadId,
+      userId
+    });
     return { error };
   }
 }

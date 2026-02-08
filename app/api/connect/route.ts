@@ -38,14 +38,14 @@ export async function POST(request: Request) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
 
-        // A. Create Lead (Only if no active lead exists for this client in this chamber)
+        // A. Create or Update Lead (Only if no active lead/client relationship exists for this client in this chamber)
         const { data: existingLead } = await serviceSupabase
             .from('leads')
-            .select('id')
+            .select('id, status')
             .eq('chamber_id', chamberId)
             .eq('email', user.email)
             .is('deleted_at', null)
-            .in('status', ['new', 'contacted', 'consultation'])
+            .in('status', ['new', 'contacted', 'consultation', 'converted'])
             .maybeSingle()
 
         if (!existingLead) {
@@ -53,17 +53,27 @@ export async function POST(request: Request) {
                 .from('leads')
                 .insert({
                     chamber_id: chamberId,
-                    name: user.user_metadata?.full_name || user.email || 'Client',
+                    name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New Client',
                     email: user.email,
-                    source: 'Directory',
+                    source: 'Direct Message',
                     status: 'new',
                     assigned_to: lawyerId,
-                    notes: message
+                    notes: `Initial message: ${message.substring(0, 500)}`
                 })
 
             if (leadError) console.warn('Lead creation failed:', leadError)
+        } else if (existingLead.status === 'lost') {
+            // Re-activate a lost lead if they reach out again
+            await serviceSupabase
+                .from('leads')
+                .update({
+                    status: 'new',
+                    updated_at: new Date().toISOString(),
+                    notes: `Lead reached out again: ${message.substring(0, 500)}`
+                })
+                .eq('id', existingLead.id)
         } else {
-            console.log('Active lead already exists for this client, skipping creation.')
+            console.log(`Lead already exists with status: ${existingLead.status}, skipping creation.`)
         }
 
         // B. Get/Create Thread

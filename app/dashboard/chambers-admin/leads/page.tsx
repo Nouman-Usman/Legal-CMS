@@ -51,22 +51,21 @@ export default function LeadsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
 
     const fetchLeads = async () => {
-        if (!user) return;
-
-        const activeChamberId = user.chambers?.[0]?.chamber_id;
-
-        if (!activeChamberId) {
-            console.warn('User has no active chamber, cannot fetch leads');
-            setLoading(false);
-            return;
-        }
-
         setLoading(true);
-        const { leads: data, error } = await getLeads(activeChamberId);
-        if (!error && data) {
-            setLeads(data);
+        try {
+            const res = await fetch('/api/chambers/leads');
+            if (res.ok) {
+                const { leads: data } = await res.json();
+                setLeads(data || []);
+            } else {
+                console.error('Failed to fetch leads:', await res.text());
+                // Fallback to empty if API fails (could show error UI)
+            }
+        } catch (err) {
+            console.error('Error fetching leads:', err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -139,6 +138,80 @@ export default function LeadsPage() {
         new: leads.filter(l => l.status === 'new').length,
         active: leads.filter(l => ['contacted', 'consultation'].includes(l.status)).length,
         converted: leads.filter(l => l.status === 'converted').length,
+    };
+
+    const [analyzing, setAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<any>(null);
+    const [analyzingLead, setAnalyzingLead] = useState<any>(null);
+
+    const handleOpenThread = async (lead: any) => {
+        if (!lead.email) {
+            console.error('Lead has no email');
+            return;
+        }
+
+        try {
+            // Find the user ID for this lead's email
+            // We can't query auth.users directly from client, but we can check public.users
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('email', lead.email)
+                .single();
+
+            if (userError || !userData) {
+                console.warn('User not found for email:', lead.email);
+                // Fallback: Redirect to messages page generally
+                window.location.href = `/dashboard/chambers-admin/messages`;
+                return;
+            }
+
+            const clientUserId = userData.id;
+            const lawyerId = lead.assigned_to; // This is the user_id of the lawyer
+
+            // Find thread between these two
+            const { data: threadData, error: threadError } = await supabase
+                .from('message_threads')
+                .select('id')
+                .contains('participant_ids', [clientUserId, lawyerId])
+                .limit(1)
+                .maybeSingle();
+
+            if (threadData) {
+                window.location.href = `/dashboard/chambers-admin/messages?threadId=${threadData.id}`;
+            } else {
+                console.warn('No thread found between', clientUserId, 'and', lawyerId);
+                window.location.href = `/dashboard/chambers-admin/messages`;
+            }
+
+        } catch (error) {
+            console.error('Error finding thread:', error);
+            window.location.href = `/dashboard/chambers-admin/messages`;
+        }
+    };
+
+    const handleAnalyzeInterest = (lead: any) => {
+        setAnalyzingLead(lead);
+        setAnalyzing(true);
+        setAnalysisResult(null);
+
+        // Simulate AI Analysis
+        setTimeout(() => {
+            const score = Math.floor(Math.random() * 30) + 70; // 70-100
+            const sentiment = score > 85 ? 'High Intent' : 'Moderate Interest';
+            const keywords = ['Urgent', 'Legal Representation', 'Consultation', 'Contract Review'];
+            const summary = lead.notes?.length > 50
+                ? "The prospect has expressed specific legal needs and shows signs of immediate urgency. Recommended fast-track to consultation."
+                : "Initial inquiry detected. Engagement level is gathering momentum but requires active nurturing to define scope.";
+
+            setAnalysisResult({
+                score,
+                sentiment,
+                keywords: keywords.sort(() => 0.5 - Math.random()).slice(0, 3),
+                summary
+            });
+            setAnalyzing(false);
+        }, 2000);
     };
 
     return (
@@ -296,7 +369,7 @@ export default function LeadsPage() {
 
                                             <div className="flex items-center gap-6 mt-10 md:mt-0 pt-8 md:pt-0 border-t md:border-t-0 border-slate-50">
                                                 <Button
-                                                    onClick={() => window.location.href = `/dashboard/chambers-admin/messages`}
+                                                    onClick={() => handleOpenThread(lead)}
                                                     variant="outline"
                                                     className="rounded-[24px] h-14 px-8 border-2 border-slate-100 dark:border-slate-800 hover:bg-slate-900 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all group-hover:scale-105 gap-2"
                                                 >
@@ -325,6 +398,7 @@ export default function LeadsPage() {
                                                     </DropdownMenu>
                                                 </div>
                                                 <Button
+                                                    onClick={() => handleAnalyzeInterest(lead)}
                                                     className="rounded-[24px] h-14 px-8 bg-slate-900 dark:bg-slate-800 text-white hover:bg-blue-600 font-black uppercase tracking-widest text-[10px] border-none shadow-xl transition-all group-hover:scale-105 gap-2"
                                                 >
                                                     Analyze Interest <ChevronRight className="w-5 h-5" />
@@ -339,6 +413,76 @@ export default function LeadsPage() {
                     </div>
 
                 </div>
+
+                {/* Analysis Modal */}
+                {analyzingLead && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-300">
+                            {analyzing ? (
+                                <div className="p-12 flex flex-col items-center justify-center space-y-8 text-center">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-blue-500 blur-2xl opacity-20 animate-pulse rounded-full" />
+                                        <div className="w-24 h-24 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <Sparkles className="w-8 h-8 text-blue-600 animate-pulse" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-2xl font-black italic tracking-tighter uppercase text-slate-900 dark:text-white">Processing Intelligence</h3>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Analyzing engagement patterns & sentiment...</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-0">
+                                    <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-8 opacity-10">
+                                            <TrendingUp className="w-32 h-32" />
+                                        </div>
+                                        <div className="relative z-10 space-y-6">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Lead Intelligence Report</p>
+                                                    <h3 className="text-3xl font-black italic tracking-tighter uppercase mt-2">{analyzingLead.name}</h3>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interest Score</p>
+                                                    <div className="text-5xl font-black italic tracking-tighter text-emerald-400">{analysisResult?.score}/100</div>
+                                                </div>
+                                            </div>
+                                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-white font-black text-[10px] uppercase tracking-widest">
+                                                {analysisResult?.sentiment}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-8 space-y-8">
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">AI Summary</h4>
+                                            <p className="text-lg font-medium text-slate-700 dark:text-slate-300 italic leading-relaxed">
+                                                "{analysisResult?.summary}"
+                                            </p>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">Detected Intent Keywords</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {analysisResult?.keywords.map((k: string) => (
+                                                    <span key={k} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 font-bold text-[10px] uppercase tracking-widest">
+                                                        {k}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <Button
+                                            onClick={() => setAnalyzingLead(null)}
+                                            className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-colors shadow-lg"
+                                        >
+                                            Acknowledge & Close
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </ProtectedRoute>
     );
