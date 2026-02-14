@@ -17,11 +17,14 @@ import {
     Save,
     Maximize2,
     Type,
-    Download
+    Download,
+    FileEdit,
+    Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { AIEditorToolbar } from '@/components/shared/ai-editor-toolbar';
 
 export default function DraftingEditorPage() {
     const params = useParams();
@@ -166,6 +169,50 @@ export default function DraftingEditorPage() {
         }
     };
 
+    const [mode, setMode] = useState<'form' | 'editor'>('form');
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    // AI Simulation Handler
+    const handleAIAction = async (action: string) => {
+        setIsGenerating(true);
+        const toastId = toast.loading('AI is processing...');
+
+        // Simulate Network Delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        let newContent = draftContent;
+
+        // Simple Heuristic Simulation (In real app, call API here)
+        switch (action) {
+            case 'improve':
+                newContent = "Your refined draft:\n\n" + newContent.replace(/\s+/g, ' ').trim();
+                toast.success('Document enhanced for clarity!', { id: toastId });
+                break;
+            case 'grammar':
+                toast.success('Grammar check complete. No critical errors found.', { id: toastId });
+                break;
+            case 'simplify':
+                newContent = newContent.replace(/terms and conditions/gi, 'terms').replace(/undertake/gi, 'promise');
+                toast.success('Legalese simplified where applicable.', { id: toastId });
+                break;
+            case 'tone_formal':
+                newContent = "RESPECTFULLY SHEWETH:\n\n" + newContent;
+                toast.success('Tone adjusted to Formal Legal.', { id: toastId });
+                break;
+            case 'expand':
+                newContent += "\n\nFURTHERMORE, the party acknowledges that all statements made herein are true to the best of their knowledge and belief, and any misrepresentation shall be grounds for immediate dismissal.";
+                toast.success('Expanded with standard clauses.', { id: toastId });
+                break;
+            case 'shorten':
+                newContent = newContent.split('\n').filter(line => line.trim().length > 0).slice(0, 3).join('\n') + "\n...[Summary Ends]";
+                toast.success('Summarized key points.', { id: toastId });
+                break;
+        }
+
+        setDraftContent(newContent);
+        setIsGenerating(false);
+    };
+
     return (
         <ProtectedRoute requiredRole="lawyer">
             <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
@@ -183,14 +230,36 @@ export default function DraftingEditorPage() {
                             <p className="text-xs text-slate-500 font-medium">Drafting Mode</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button variant="outline" onClick={handleCopy} className="gap-2 rounded-xl font-bold">
-                            <Copy className="w-4 h-4" />
-                            Copy Text
+
+                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                        <Button
+                            variant={mode === 'form' ? 'secondary' : 'ghost'}
+                            onClick={() => setMode('form')}
+                            size="sm"
+                            className={cn("text-xs font-bold gap-2", mode === 'form' && "shadow-sm bg-white dark:bg-slate-700")}
+                        >
+                            <Type className="w-3 h-3" />
+                            Smart Form
                         </Button>
-                        <Button onClick={handleDownloadPDF} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold gap-2">
-                            <Download className="w-4 h-4" />
-                            Download PDF
+                        <Button
+                            variant={mode === 'editor' ? 'secondary' : 'ghost'}
+                            onClick={() => setMode('editor')}
+                            size="sm"
+                            className={cn("text-xs font-bold gap-2", mode === 'editor' && "shadow-sm bg-white dark:bg-slate-700")}
+                        >
+                            <FileEdit className="w-3 h-3" />
+                            AI Editor
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={handleCopy} className="gap-2 rounded-xl font-bold h-9 text-xs">
+                            <Copy className="w-3.5 h-3.5" />
+                            Copy
+                        </Button>
+                        <Button onClick={handleDownloadPDF} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold gap-2 h-9 text-xs">
+                            <Download className="w-3.5 h-3.5" />
+                            Download
                         </Button>
                     </div>
                 </header>
@@ -198,94 +267,102 @@ export default function DraftingEditorPage() {
                 {/* Main Workspace */}
                 <div className="flex-1 flex overflow-hidden">
 
-                    {/* Left: Input Form */}
-                    <div className="w-1/3 min-w-[320px] max-w-[480px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20">
-                        <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-                            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                                <Type className="w-4 h-4" />
-                                Variable Inputs
-                            </h2>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {template.fields.map(field => (
-                                <div key={field.id} className="space-y-2 animate-in slide-in-from-left-2 duration-300">
-                                    <Label className="text-xs font-bold uppercase text-slate-600 dark:text-slate-400">
-                                        {field.label}
-                                    </Label>
-                                    {field.type === 'textarea' ? (
-                                        <Textarea
-                                            placeholder={field.placeholder || `Enter ${field.label}...`}
-                                            value={formData[field.id] || ''}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                                            className="min-h-[100px] rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:ring-indigo-500"
-                                        />
-                                    ) : (
-                                        <Input
-                                            type={field.type === 'money' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-                                            placeholder={field.placeholder || `Enter ${field.label}...`}
-                                            value={formData[field.id] || ''}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                                            className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:ring-indigo-500"
-                                        />
-                                    )}
+                    {mode === 'form' ? (
+                        <>
+                            {/* Left: Input Form */}
+                            <div className="w-1/3 min-w-[320px] max-w-[400px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20 animate-in slide-in-from-left duration-300">
+                                <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900">
+                                    <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                                        <Type className="w-3 h-3" />
+                                        Template Variables
+                                    </h2>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right: Preview */}
-                    <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-8 flex flex-col overflow-hidden relative">
-                        <div className="max-w-4xl mx-auto w-full h-full flex flex-col bg-white shadow-2xl rounded-sm overflow-hidden border border-slate-200">
-                            {/* Paper Header */}
-                            <div className="bg-slate-50 border-b border-slate-100 px-8 py-3 flex justify-between items-center text-xs text-slate-400 font-mono">
-                                <span>A4 Size</span>
-                                <span>Draft Preview</span>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                    {template.fields.map(field => (
+                                        <div key={field.id} className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-1">
+                                                {field.label}
+                                            </Label>
+                                            {field.type === 'textarea' ? (
+                                                <Textarea
+                                                    placeholder={field.placeholder || `Enter ${field.label}...`}
+                                                    value={formData[field.id] || ''}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                                                    className="min-h-[100px] rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:ring-indigo-500 font-medium text-sm"
+                                                />
+                                            ) : (
+                                                <Input
+                                                    type={field.type === 'money' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                                                    placeholder={field.placeholder || `Enter ${field.label}...`}
+                                                    value={formData[field.id] || ''}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                                                    className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:ring-indigo-500 font-medium text-sm"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
-                            {/* Paper Content */}
-                            <div
-                                id="draft-ref-content"
-                                style={{
-                                    backgroundColor: '#ffffff',
-                                    color: '#0f172a',
-                                    padding: '3rem',
-                                    fontFamily: 'serif',
-                                    lineHeight: '1.625',
-                                    whiteSpace: 'pre-wrap',
-                                    fontSize: '1rem',
-                                    overflowY: 'auto',
-                                    flex: '1 1 0%'
-                                }}
-                            >
-                                {draftContent.split('{{').map((part, index) => {
-                                    if (index === 0) return part;
-                                    const split = part.split('}}');
-                                    const key = split[0];
-                                    const rest = split[1];
-                                    return (
-                                        <React.Fragment key={index}>
-                                            <span
-                                                style={{
-                                                    backgroundColor: '#fef3c7', // bg-amber-100
-                                                    color: '#b45309',           // text-amber-700
-                                                    borderColor: '#fcd34d',      // border-amber-300
-                                                    borderWidth: '1px',
-                                                    borderStyle: 'dashed',
-                                                    fontWeight: 'bold',
-                                                    padding: '0 4px',
-                                                    borderRadius: '4px',
-                                                    margin: '0 2px'
-                                                }}
-                                            >
-                                                {key.replace(/_/g, ' ')}
-                                            </span>
-                                            {rest}
-                                        </React.Fragment>
-                                    );
-                                })}
+                            {/* Right: Preview (Read Only) */}
+                            <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-8 flex flex-col overflow-hidden relative">
+                                <div className="max-w-3xl mx-auto w-full h-full flex flex-col bg-white shadow-xl shadow-slate-200/50 rounded-sm overflow-hidden border border-slate-200">
+                                    <div className="bg-slate-50 border-b border-slate-100 px-6 py-2 flex justify-between items-center text-[10px] text-slate-400 font-mono uppercase tracking-widest">
+                                        <span>Preview Mode</span>
+                                        <span>Auto-Updating</span>
+                                    </div>
+                                    <div
+                                        id="draft-ref-content"
+                                        className="flex-1 p-12 font-serif text-base leading-relaxed overflow-y-auto bg-white text-slate-900 whitespace-pre-wrap select-text"
+                                    >
+                                        {draftContent.split('{{').map((part, index) => {
+                                            if (index === 0) return part;
+                                            const split = part.split('}}');
+                                            const key = split[0];
+                                            const rest = split[1];
+                                            return (
+                                                <React.Fragment key={index}>
+                                                    <span className="bg-yellow-100 text-yellow-800 border-b-2 border-yellow-300 font-bold px-1 rounded mx-0.5">
+                                                        {key.replace(/_/g, ' ')}
+                                                    </span>
+                                                    {rest}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        // AI Editor Mode
+                        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 animate-in fade-in duration-300">
+                            <div className="max-w-5xl mx-auto w-full h-full flex flex-col p-6 gap-4">
+
+                                <AIEditorToolbar onAction={handleAIAction} isGenerating={isGenerating} />
+
+                                <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col relative">
+                                    {isGenerating && (
+                                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                                            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in zoom-in-95">
+                                                <Sparkles className="w-8 h-8 text-indigo-600 animate-pulse" />
+                                                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">AI is crafting...</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <Textarea
+                                        value={draftContent}
+                                        onChange={(e) => setDraftContent(e.target.value)}
+                                        className="flex-1 p-8 text-base font-serif leading-relaxed border-none focus:ring-0 resize-none rounded-none text-slate-800 dark:text-slate-200 selection:bg-indigo-100 selection:text-indigo-900"
+                                        placeholder="Start typing or let AI help you..."
+                                    />
+                                    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 font-mono flex justify-between">
+                                        <span>{draftContent.length} chars</span>
+                                        <span>{draftContent.split(/\s+/).length} words</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                 </div>
             </div>

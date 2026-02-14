@@ -90,6 +90,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                     items: [
                         { name: 'Settings', href: '/dashboard/chambers-admin/settings', icon: Settings },
                         { name: 'Audit Logs', href: '/dashboard/chambers-admin/audit-logs', icon: ShieldCheck },
+                        { name: 'Template Builder', href: '/dashboard/chambers-admin/templates/builder', icon: PenTool },
                     ]
                 }
             ];
