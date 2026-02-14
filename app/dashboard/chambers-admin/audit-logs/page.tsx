@@ -26,9 +26,12 @@ export default function AuditLogsPage() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const fetchLogs = async () => {
-        if (!user?.chamber_id) return;
+        // Fallback: if user.chamber_id is not available (Type discrepancy), check chambers array
+        const chamberId = (user as any)?.chamber_id || (user as any)?.chambers?.[0]?.chamber_id;
+
+        if (!chamberId) return;
         setLoading(true);
-        const { logs: data, error } = await getChamberAuditLogs(user.chamber_id);
+        const { logs: data, error } = await getChamberAuditLogs(chamberId);
         if (!error && data) {
             setLogs(data);
         }

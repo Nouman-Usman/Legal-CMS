@@ -8,7 +8,6 @@ import {
     LayoutDashboard,
     Briefcase,
     Users,
-    UserSquare2,
     Calendar,
     Settings,
     ChevronLeft,
@@ -23,17 +22,14 @@ import {
     FolderOpen,
     Zap,
     Scale,
-    History,
-    Bell,
     User as UserIcon,
-    ArrowUpRight,
-    Lock,
-    UserPlus,
-    Home
+    Home,
+    Search as SearchIcon,
+    Command
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 
 interface SidebarProps {
     isCollapsed: boolean;
@@ -43,6 +39,18 @@ interface SidebarProps {
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     const pathname = usePathname();
     const { signOut, userRole, user } = useAuth();
+
+    // Helper to determine if a route is active
+    const isRouteActive = (href: string) => {
+        if (pathname === href) return true;
+        // Prevent partial matching for root dashboard paths
+        if (href === '/' || href === '/dashboard' ||
+            ['/dashboard/chambers-admin', '/dashboard/lawyer', '/dashboard/client'].includes(href)) {
+            return false;
+        }
+
+        return pathname.startsWith(href + '/');
+    };
 
     const getNavGroups = () => {
         const common = {
@@ -56,36 +64,31 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         if (userRole === 'chamber_admin') {
             return [
                 {
-                    label: 'Main',
+                    label: 'Overview',
                     items: [
-                        { name: 'Home', href: '/dashboard/chambers-admin', icon: Home },
+                        { name: 'Dashboard', href: '/dashboard/chambers-admin', icon: LayoutDashboard },
+                        { name: 'Leads Pipeline', href: '/dashboard/chambers-admin/leads', icon: Zap },
                     ]
                 },
                 {
                     label: 'Management',
                     items: [
-                        { name: 'All Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
-                        { name: 'All Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
-                        { name: 'Our Clients', href: '/dashboard/chambers-admin/clients', icon: Users },
+                        { name: 'Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
+                        { name: 'Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
+                        { name: 'Clients', href: '/dashboard/chambers-admin/clients', icon: Users },
                     ]
                 },
                 {
-                    label: 'Growth',
+                    label: 'Operations',
                     items: [
-                        { name: 'Leads Pipeline', href: '/dashboard/chambers-admin/leads', icon: Zap },
-                        { name: 'Message Oversight', href: '/dashboard/chambers-admin/messages', icon: MessageSquare },
-                    ]
-                },
-                {
-                    label: 'Administration',
-                    items: [
+                        { name: 'Messages', href: '/dashboard/chambers-admin/messages', icon: MessageSquare },
                         { name: 'Calendar', href: '/dashboard/chambers-admin/calendar', icon: Calendar },
-                        { name: 'Settings', href: '/dashboard/chambers-admin/settings', icon: Settings },
                     ]
                 },
                 {
-                    label: 'Compliance',
+                    label: 'System',
                     items: [
+                        { name: 'Settings', href: '/dashboard/chambers-admin/settings', icon: Settings },
                         { name: 'Audit Logs', href: '/dashboard/chambers-admin/audit-logs', icon: ShieldCheck },
                     ]
                 }
@@ -95,36 +98,31 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         if (userRole === 'lawyer') {
             return [
                 {
-                    label: 'Main',
+                    label: 'Overview',
                     items: [
-                        { name: 'Home', href: '/dashboard/lawyer', icon: Home },
+                        { name: 'Dashboard', href: '/dashboard/lawyer', icon: LayoutDashboard },
+                        { name: 'Calendar', href: '/dashboard/lawyer/calendar', icon: Calendar },
                     ]
                 },
                 {
-                    label: 'Operations',
+                    label: 'Caseload',
                     items: [
                         { name: 'My Cases', href: '/dashboard/lawyer/cases', icon: Briefcase },
-                        { name: 'My Tasks', href: '/dashboard/lawyer/tasks', icon: FileText },
+                        { name: 'Tasks', href: '/dashboard/lawyer/tasks', icon: FileText },
                     ]
                 },
                 {
                     label: 'Tools',
                     items: [
-                        { name: 'Case Research', href: '/dashboard/lawyer/research', icon: Search },
-                        { name: 'Drafting Tool', href: '/dashboard/lawyer/drafting', icon: PenTool },
-                    ]
-                },
-                {
-                    label: 'Messaging',
-                    items: [
+                        { name: 'Research', href: '/dashboard/lawyer/research', icon: Search },
+                        { name: 'Drafting', href: '/dashboard/lawyer/drafting', icon: PenTool },
                         { name: 'Messages', href: '/dashboard/lawyer/messages', icon: MessageSquare },
-                        { name: 'My Calendar', href: '/dashboard/lawyer/calendar', icon: Calendar },
                     ]
                 },
                 {
-                    label: 'Account',
+                    label: 'Settings',
                     items: [
-                        { name: 'Profile Settings', href: '/dashboard/lawyer/profile', icon: UserIcon },
+                        { name: 'Profile', href: '/dashboard/lawyer/profile', icon: UserIcon },
                     ]
                 }
             ];
@@ -133,23 +131,18 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         if (userRole === 'client') {
             return [
                 {
-                    label: 'Main',
+                    label: 'Overview',
                     items: [
-                        { name: 'Home', href: '/dashboard/client', icon: Home },
+                        { name: 'Dashboard', href: '/dashboard/client', icon: LayoutDashboard },
+                        { name: 'Find Lawyers', href: '/dashboard/client/find-lawyers', icon: Search },
                     ]
                 },
                 {
-                    label: 'Client Dashboard',
+                    label: 'Matters',
                     items: [
                         { name: 'My Cases', href: '/dashboard/client/cases', icon: Briefcase },
-                        { name: 'My Documents', href: '/dashboard/client/documents', icon: FolderOpen },
-                    ]
-                },
-                {
-                    label: 'Communication',
-                    items: [
-                        { name: 'Lawyer Messages', href: '/dashboard/client/messages', icon: MessageSquare },
-                        { name: 'Find Lawyers', href: '/dashboard/client/find-lawyers', icon: Search },
+                        { name: 'Documents', href: '/dashboard/client/documents', icon: FolderOpen },
+                        { name: 'Messages', href: '/dashboard/client/messages', icon: MessageSquare },
                     ]
                 }
             ];
@@ -163,83 +156,90 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={cn(
-                "flex flex-col h-screen bg-slate-950 text-slate-400 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] border-r border-white/5 relative z-50 shadow-2xl overflow-hidden",
-                isCollapsed ? "w-24" : "w-80"
+                "flex flex-col h-screen bg-[#09090b] text-slate-400 border-r border-white/[0.08] transition-all duration-300 relative z-50",
+                isCollapsed ? "w-[80px]" : "w-[260px]"
             )}
         >
-            {/* Elite Background Accents */}
-            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-600/5 to-transparent pointer-events-none" />
-            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
+            {/* Header / Brand */}
+            <div className="flex flex-col gap-4 p-4 shrink-0">
+                <div className="flex items-center gap-3 h-10 overflow-hidden">
+                    <div className="flex items-center justify-center shrink-0 w-10 h-10 bg-white text-black rounded-xl shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                        <Scale className="w-5 h-5" strokeWidth={2.5} />
+                    </div>
 
-            {/* Firmware Header */}
-            <div className="flex items-center gap-4 px-6 h-28 shrink-0 relative">
-                <div className="relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition-opacity duration-500" />
-                    <div className="relative w-12 h-12 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center shadow-2xl">
-                        <Scale className="w-6 h-6 text-blue-400" />
+                    <div className={cn(
+                        "flex flex-col transition-all duration-300 origin-left min-w-0",
+                        isCollapsed ? "opacity-0 w-0 translate-x-4" : "opacity-100 w-auto"
+                    )}>
+                        <span className="font-semibold text-white tracking-tight text-[15px] whitespace-nowrap">
+                            Apna Waqeel
+                        </span>
+                        <span className="text-[10px] uppercase font-medium text-slate-500 tracking-wider">
+                            Workspace
+                        </span>
                     </div>
                 </div>
+
                 {!isCollapsed && (
-                    <div className="flex flex-col animate-in fade-in slide-in-from-left-4 duration-500">
-                        <span className="font-black text-xl text-white tracking-tighter uppercase leading-none italic">
-                            Chambers <span className="text-blue-600">Admin</span>
-                        </span>
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mt-1">Management Hub</span>
+                    <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input
+                            type="text"
+                            placeholder="Search..."
+                            className="w-full h-9 bg-white/[0.03] border border-white/[0.08] rounded-lg pl-9 pr-4 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/[0.15] transition-colors"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 border border-white/[0.08] rounded px-1.5 py-0.5 bg-white/[0.02]">
+                            <Command className="w-3 h-3 text-slate-600" />
+                            <span className="text-[10px] text-slate-600 font-medium">K</span>
+                        </div>
                     </div>
                 )}
             </div>
 
-            {/* Dynamic Navigation */}
-            <div className="flex-1 overflow-y-auto py-4 px-4 space-y-10 no-scrollbar">
+            {/* Navigation */}
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-6 no-scrollbar">
                 {navGroups.map((group, gIdx) => (
-                    <div key={gIdx} className="space-y-3">
+                    <div key={gIdx} className="space-y-1">
                         {!isCollapsed && (
-                            <div className="px-4 flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 italic whitespace-nowrap">
+                            <div className="px-3 mb-2 flex items-center justify-between group/label">
+                                <h3 className="text-[11px] font-medium text-slate-500 uppercase tracking-widest">
                                     {group.label}
-                                </span>
-                                <div className="h-px w-full bg-slate-900" />
+                                </h3>
                             </div>
                         )}
-                        <div className="space-y-1.5">
+
+                        <div className="space-y-0.5">
                             {group.items.map((item) => {
-                                const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/' && !['/dashboard/chambers-admin', '/dashboard/lawyer', '/dashboard/client'].includes(item.href) && pathname.startsWith(item.href + '/'));
+                                const isActive = isRouteActive(item.href);
+
                                 return (
                                     <Link
                                         key={item.href}
                                         href={item.href}
-                                        className={cn(
-                                            "flex items-center gap-4 px-4 h-14 rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                                            isActive
-                                                ? "bg-white/[0.03] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"
-                                                : "hover:bg-white/[0.02] hover:text-white"
-                                        )}
+                                        className="group relative block"
                                     >
                                         <div className={cn(
-                                            "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
+                                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm",
                                             isActive
-                                                ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
-                                                : "bg-slate-900 text-slate-500 group-hover:text-slate-300 group-hover:scale-110"
+                                                ? "bg-white/[0.08] text-white font-medium"
+                                                : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]"
                                         )}>
-                                            <item.icon className="w-5 h-5" />
+                                            <item.icon className={cn(
+                                                "h-4.5 w-4.5 shrink-0 transition-colors",
+                                                isActive ? "text-white" : "text-slate-500 group-hover:text-slate-300"
+                                            )} strokeWidth={1.5} />
+
+                                            <span className={cn(
+                                                "transition-all duration-300 overflow-hidden whitespace-nowrap",
+                                                isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                                            )}>
+                                                {item.name}
+                                            </span>
                                         </div>
 
-                                        {!isCollapsed && (
-                                            <div className="flex flex-col flex-1 animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <span className={cn(
-                                                    "text-xs font-black uppercase tracking-widest",
-                                                    isActive ? "text-white" : "text-slate-400 group-hover:text-slate-200"
-                                                )}>{item.name}</span>
-                                            </div>
-                                        )}
-
-                                        {isActive && (
-                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full shadow-[0_0_20px_rgba(37,99,235,0.8)]" />
-                                        )}
-
-                                        {/* Hover Tooltip for Collapsed State */}
+                                        {/* Tooltip for collapsed state */}
                                         {isCollapsed && (
-                                            <div className="absolute left-[calc(100%+1rem)] px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-[100] shadow-2xl border border-white/5 translate-x-1 group-hover:translate-x-0">
+                                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-[#09090b] text-white text-xs font-medium rounded-md shadow-xl border border-white/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
                                                 {item.name}
                                             </div>
                                         )}
@@ -251,64 +251,70 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 ))}
             </div>
 
-            {/* Profile & Firmware Commands */}
-            <div className="p-6 space-y-6 relative shrink-0">
-                <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+            {/* Footer / Profile */}
+            <div className="p-3 border-t border-white/[0.08] bg-[#09090b]">
+                <div className={cn(
+                    "relative flex items-center gap-3 p-2 rounded-xl transition-all hover:bg-white/[0.04] group cursor-pointer border border-transparent hover:border-white/[0.05]",
+                    isCollapsed ? "justify-center" : ""
+                )}>
+                    <Avatar className="h-9 w-9 shrink-0 border border-white/10">
+                        <AvatarImage src={user?.user_metadata?.avatar_url} />
+                        <AvatarFallback className="bg-white/10 text-slate-300 text-xs font-medium">
+                            {user?.full_name?.charAt(0) || userRole?.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
 
-                {/* Tactical User Hub */}
-                {!isCollapsed ? (
-                    <div className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 flex items-center gap-4 group transition-all hover:bg-white/[0.04]">
-                        <div className="relative">
-                            <Avatar className="w-12 h-12 rounded-2xl border-2 border-slate-900 group-hover:scale-105 transition-transform duration-300">
-                                <AvatarImage src={user?.user_metadata?.avatar_url} />
-                                <AvatarFallback className="bg-blue-600 text-white text-xs font-black italic">
-                                    {user?.full_name?.charAt(0) || userRole?.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-4 border-slate-950 animate-pulse" />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-black text-white truncate uppercase italic tracking-tighter">
-                                {user?.full_name || 'Anonymous Operator'}
+                    {!isCollapsed && (
+                        <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[13px] font-medium text-white truncate">
+                                {user?.full_name || 'User'}
                             </span>
-                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-500/80">
+                            <span className="text-[11px] text-slate-500 truncate capitalize">
                                 {userRole?.replace('_', ' ')}
                             </span>
                         </div>
-                    </div>
-                ) : (
-                    <div className="flex justify-center">
-                        <Avatar className="w-12 h-12 rounded-2xl border-2 border-slate-900 hover:scale-110 transition-transform duration-300 cursor-pointer">
-                            <AvatarFallback className="bg-blue-600 text-white text-xs font-black italic">
-                                {user?.full_name?.charAt(0)}
-                            </AvatarFallback>
-                        </Avatar>
-                    </div>
-                )}
+                    )}
 
-                <div className="flex flex-col gap-2">
+                    {!isCollapsed && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Settings className="w-4 h-4 text-slate-500" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-2 grid grid-cols-2 gap-1">
                     <button
                         onClick={onToggle}
-                        className="flex w-full items-center justify-center gap-3 text-slate-500 hover:text-white hover:bg-white/5 h-14 rounded-2xl transition-all border border-transparent hover:border-white/5 group"
-                    >
-                        {isCollapsed ? <ChevronRight className="w-6 h-6" /> : (
-                            <>
-                                <ChevronLeft className="w-5 h-5 shrink-0 opacity-50 group-hover:opacity-100" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Collapse Menu</span>
-                            </>
+                        className={cn(
+                            "flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-all border border-transparent hover:border-white/[0.05]",
+                            isCollapsed ? "col-span-2" : ""
                         )}
+                        title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                    >
+                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                     </button>
 
+                    {!isCollapsed && (
+                        <button
+                            onClick={() => signOut()}
+                            className="flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/10"
+                            title="Sign Out"
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+
+                {isCollapsed && (
                     <button
                         onClick={() => signOut()}
-                        className="flex w-full items-center justify-center gap-3 text-rose-500 hover:text-white hover:bg-rose-500 h-14 rounded-2xl transition-all border border-rose-500/20 group relative overflow-hidden"
+                        className="mt-1 w-full flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                        title="Sign Out"
                     >
-                        <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
-                        {!isCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Sign Out</span>}
+                        <LogOut className="h-4 w-4" />
                     </button>
-                </div>
+                )}
             </div>
         </aside>
     );
 }
-

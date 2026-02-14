@@ -40,31 +40,20 @@ export async function logAction(
 }
 
 export async function getChamberAuditLogs(chamberId: string, limit = 100) {
-    const { data, error } = await supabase
+    const { data: logs, error } = await supabase
         .from('audit_logs')
         .select(`
             *,
-            user:users!audit_logs_user_id_fkey(full_name, email, role, chamber_id)
+            user:users!audit_logs_user_id_fkey(full_name, email, role)
         `)
         .order('created_at', { ascending: false })
         .limit(limit);
 
-    // We need to filter by chamber_id on the joined user because audit_logs doesn't have chamber_id directly
-    // Ideally, RLS handles this, but for extra safety or client-side filtering:
+    if (error) {
+        console.error('Error fetching audit logs:', error);
+        return { logs: [], error };
+    }
 
-    // Note: If we rely on RLS, we just select. 
-    // BUT, the foreign key relationship in schema might be named differently.
-    // Schema: users public_users? @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-    // Relation name is default.
-
-    if (error) return { logs: [], error };
-
-    // Filter specifically for users in this chamber
-    // If RLS is set up correctly for 'chamber_admin' to see logs of users in THEIR chamber, this is implicit.
-    // However, without RLS on join, we get all. 
-    // The current query might return null for user if they don't match or permissions fail.
-
-    const filtered = data?.filter((log: any) => log.user?.chamber_id === chamberId);
-
-    return { logs: filtered || [], error: null };
+    // Since RLS now filters logs based on chamber membership, we can return the data directly.
+    return { logs: logs || [], error: null };
 }

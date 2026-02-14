@@ -220,13 +220,13 @@ export default function LeadsPage() {
                 <div className="max-w-7xl mx-auto space-y-10">
 
                     {/* Header */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-100 dark:border-slate-800 pb-10">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-100 dark:border-slate-800 pb-6 md:pb-10">
                         <div className="space-y-4">
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 text-white font-black text-[9px] uppercase tracking-[0.3em]">
                                 <Zap className="w-3.5 h-3.5 text-blue-400" />
                                 Client Acquisition Pipeline
                             </div>
-                            <h1 className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white leading-none uppercase italic">Growth <span className="text-blue-600">Engine</span></h1>
+                            <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-slate-900 dark:text-white leading-none uppercase italic">Growth <span className="text-blue-600">Engine</span></h1>
                             <p className="text-slate-500 font-medium italic">Accelerating firm expansion through intelligent intake and conversion tracking.</p>
                         </div>
                         <div className="flex gap-4">
@@ -235,7 +235,7 @@ export default function LeadsPage() {
                     </div>
 
                     {/* Funnel Metrics */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                         {[
                             { label: 'Total Prospects', value: stats.total, icon: Users, color: 'text-slate-900 bg-white' },
                             { label: 'Fresh Inquiries', value: stats.new, icon: Zap, color: 'text-blue-600 bg-blue-50' },
@@ -243,13 +243,13 @@ export default function LeadsPage() {
                             { label: 'Conversion Rate', value: stats.total > 0 ? `${Math.round((stats.converted / stats.total) * 100)}%` : '0%', icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50' },
                         ].map((stat, i) => (
                             <Card key={i} className="border-none shadow-sm dark:bg-slate-900 rounded-[32px] overflow-hidden bg-white group hover:shadow-xl transition-all">
-                                <CardContent className="p-8 space-y-4">
+                                <CardContent className="p-6 md:p-8 space-y-4">
                                     <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform", stat.color)}>
                                         <stat.icon className="w-6 h-6" />
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{stat.label}</p>
-                                        <p className="text-4xl font-black italic tracking-tighter text-slate-900 dark:text-white mt-1">{stat.value}</p>
+                                        <p className="text-3xl md:text-4xl font-black italic tracking-tighter text-slate-900 dark:text-white mt-1">{stat.value}</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -294,7 +294,7 @@ export default function LeadsPage() {
                                 </CardContent>
                             </Card>
 
-                            <div className="p-10 rounded-[40px] bg-emerald-950 text-white space-y-6 relative overflow-hidden group shadow-2xl">
+                            <div className="p-6 md:p-10 rounded-[40px] bg-emerald-950 text-white space-y-6 relative overflow-hidden group shadow-2xl">
                                 <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
                                     <TrendingUp className="w-24 h-24" />
                                 </div>
@@ -324,7 +324,7 @@ export default function LeadsPage() {
                                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Syncing Intake Database...</p>
                                     </div>
                                 ) : filteredLeads.length === 0 ? (
-                                    <div className="py-40 text-center space-y-6 bg-white dark:bg-slate-900 rounded-[56px] border-2 border-dashed border-slate-100 dark:border-slate-800">
+                                    <div className="py-20 md:py-40 text-center space-y-6 bg-white dark:bg-slate-900 rounded-[56px] border-2 border-dashed border-slate-100 dark:border-slate-800">
                                         <Zap className="w-20 h-20 mx-auto text-slate-100" />
                                         <div className="space-y-2">
                                             <h3 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-300">Pipeline Inert</h3>
@@ -335,21 +335,21 @@ export default function LeadsPage() {
                                     filteredLeads.map((lead) => (
                                         <div
                                             key={lead.id}
-                                            className="group flex flex-col md:flex-row md:items-center justify-between p-10 rounded-[56px] bg-white dark:bg-slate-900 border border-slate-50 dark:border-slate-800 hover:shadow-2xl hover:shadow-blue-500/5 transition-all relative overflow-hidden"
+                                            className="group flex flex-col xl:flex-row xl:items-center justify-between p-6 md:p-10 rounded-[40px] md:rounded-[56px] bg-white dark:bg-slate-900 border border-slate-50 dark:border-slate-800 hover:shadow-2xl hover:shadow-blue-500/5 transition-all relative overflow-hidden"
                                         >
-                                            <div className="flex items-start gap-8">
-                                                <div className="w-16 h-16 rounded-[28px] bg-slate-50 dark:bg-slate-800 shadow-inner flex items-center justify-center text-2xl font-black italic text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:scale-110">
+                                            <div className="flex items-start gap-4 md:gap-8">
+                                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-[20px] md:rounded-[28px] bg-slate-50 dark:bg-slate-800 shadow-inner flex items-center justify-center text-xl md:text-2xl font-black italic text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:scale-110 shrink-0">
                                                     {lead.name?.charAt(0)}
                                                 </div>
                                                 <div className="space-y-3">
-                                                    <div className="flex items-center gap-4">
+                                                    <div className="flex flex-wrap items-center gap-2 md:gap-4">
                                                         {getStatusBadge(lead.status)}
                                                         <div className="w-1 h-1 rounded-full bg-slate-200" />
                                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic flex items-center gap-2">
                                                             <Calendar className="w-3.5 h-3.5" /> {new Date(lead.created_at).toLocaleDateString()}
                                                         </span>
                                                     </div>
-                                                    <h3 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{lead.name}</h3>
+                                                    <h3 className="text-xl md:text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">{lead.name}</h3>
                                                     <div className="flex flex-wrap items-center gap-8 pt-2">
                                                         <div className="flex items-center gap-2.5">
                                                             <Mail className="w-4 h-4 text-slate-400" />
@@ -367,11 +367,11 @@ export default function LeadsPage() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-6 mt-10 md:mt-0 pt-8 md:pt-0 border-t md:border-t-0 border-slate-50">
+                                            <div className="flex flex-col sm:flex-row xl:items-center gap-3 sm:gap-6 mt-6 xl:mt-0 pt-6 xl:pt-0 border-t xl:border-t-0 border-slate-50">
                                                 <Button
                                                     onClick={() => handleOpenThread(lead)}
                                                     variant="outline"
-                                                    className="rounded-[24px] h-14 px-8 border-2 border-slate-100 dark:border-slate-800 hover:bg-slate-900 hover:text-white font-black uppercase tracking-widest text-[10px] transition-all group-hover:scale-105 gap-2"
+                                                    className="w-full sm:w-auto rounded-[24px] h-12 md:h-14 px-6 md:px-8 border-2 border-slate-100 dark:border-slate-800 hover:bg-slate-900 hover:text-white font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all group-hover:scale-105 gap-2"
                                                 >
                                                     Open Intelligence Stream <MessageSquare className="w-4 h-4" />
                                                 </Button>
@@ -399,7 +399,7 @@ export default function LeadsPage() {
                                                 </div>
                                                 <Button
                                                     onClick={() => handleAnalyzeInterest(lead)}
-                                                    className="rounded-[24px] h-14 px-8 bg-slate-900 dark:bg-slate-800 text-white hover:bg-blue-600 font-black uppercase tracking-widest text-[10px] border-none shadow-xl transition-all group-hover:scale-105 gap-2"
+                                                    className="w-full sm:w-auto rounded-[24px] h-12 md:h-14 px-6 md:px-8 bg-slate-900 dark:bg-slate-800 text-white hover:bg-blue-600 font-black uppercase tracking-widest text-[9px] md:text-[10px] border-none shadow-xl transition-all group-hover:scale-105 gap-2"
                                                 >
                                                     Analyze Interest <ChevronRight className="w-5 h-5" />
                                                 </Button>
@@ -417,9 +417,9 @@ export default function LeadsPage() {
                 {/* Analysis Modal */}
                 {analyzingLead && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-300">
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-300">
                             {analyzing ? (
-                                <div className="p-12 flex flex-col items-center justify-center space-y-8 text-center">
+                                <div className="p-8 md:p-12 flex flex-col items-center justify-center space-y-8 text-center">
                                     <div className="relative">
                                         <div className="absolute inset-0 bg-blue-500 blur-2xl opacity-20 animate-pulse rounded-full" />
                                         <div className="w-24 h-24 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
@@ -454,7 +454,7 @@ export default function LeadsPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-8 space-y-8">
+                                    <div className="p-6 md:p-8 space-y-6 md:space-y-8">
                                         <div className="space-y-4">
                                             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">AI Summary</h4>
                                             <p className="text-lg font-medium text-slate-700 dark:text-slate-300 italic leading-relaxed">

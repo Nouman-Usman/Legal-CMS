@@ -121,7 +121,7 @@ export default function CalendarPage() {
 
             const isSameType = filterType === 'all' || e.type === filterType;
 
-            const matchesSearch = searchQuery === '' || 
+            const matchesSearch = searchQuery === '' ||
                 e.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 e.caseNumber?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -226,6 +226,58 @@ export default function CalendarPage() {
         }
     };
 
+    const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+    const [syncing, setSyncing] = useState(false);
+
+    useEffect(() => {
+        const checkConnection = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log("Session Provider Token:", session?.provider_token ? "Found" : "Missing");
+            if (session?.provider_token) {
+                setGoogleAccessToken(session.provider_token);
+            }
+        };
+        checkConnection();
+    }, [supabase.auth]);
+
+    const handleSyncGoogle = async () => {
+        if (!googleAccessToken || !user?.chamber_id) return;
+
+        setSyncing(true);
+        try {
+            // Get events for current view
+            const startDate = calendarDays[0].date;
+            const endDate = calendarDays[calendarDays.length - 1].date;
+
+            // Re-fetch to be safe or use state
+            const { events: eventsToSync } = await getCalendarEvents(user.chamber_id, startDate, endDate);
+
+            const response = await fetch('/api/calendar/google/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    accessToken: googleAccessToken,
+                    events: eventsToSync,
+                    chamberId: user.chamber_id
+                })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to sync');
+            }
+
+            console.log('Sync successful');
+        } catch (error) {
+            console.error('Sync failed:', error);
+            if (error instanceof Error && error.message.includes('token')) {
+                setGoogleAccessToken(null); // Force reconnect if token invalid
+            }
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const handleConnectGoogle = async () => {
         setConnecting(true);
         try {
@@ -290,7 +342,7 @@ export default function CalendarPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                    <div className="relative group hidden md:block">
+                        <div className="relative group hidden md:block">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                             <input
                                 type="text"
@@ -388,8 +440,8 @@ export default function CalendarPage() {
                                     <div className="w-2 h-2 rounded-full bg-indigo-600" /> Firm Events
                                 </div>
                                 <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                    <Button 
-                                        variant="outline" 
+                                    <Button
+                                        variant="outline"
                                         size="sm"
                                         onClick={() => handleExportCalendar('ics')}
                                         className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
@@ -397,8 +449,8 @@ export default function CalendarPage() {
                                         <Download className="h-3 w-3" />
                                         iCal
                                     </Button>
-                                    <Button 
-                                        variant="outline" 
+                                    <Button
+                                        variant="outline"
                                         size="sm"
                                         onClick={() => handleExportCalendar('csv')}
                                         className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
@@ -635,12 +687,32 @@ export default function CalendarPage() {
                                     <Button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleConnectGoogle();
+                                            if (googleAccessToken) {
+                                                handleSyncGoogle();
+                                            } else {
+                                                handleConnectGoogle();
+                                            }
                                         }}
-                                        disabled={connecting}
-                                        className="w-full bg-indigo-500 hover:bg-indigo-600 dark:bg-slate-900 dark:text-white text-white font-black text-[10px] uppercase tracking-[2px] transition-all shadow-lg"
+                                        disabled={connecting || syncing}
+                                        className={cn(
+                                            "w-full font-black text-[10px] uppercase tracking-[2px] transition-all shadow-lg",
+                                            googleAccessToken
+                                                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                                : "bg-indigo-500 hover:bg-indigo-600 dark:bg-slate-900 dark:text-white text-white"
+                                        )}
                                     >
-                                        {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Connect Now'}
+                                        {connecting ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : syncing ? (
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Syncing...
+                                            </div>
+                                        ) : googleAccessToken ? (
+                                            'Sync Now'
+                                        ) : (
+                                            'Connect Now'
+                                        )}
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -649,9 +721,9 @@ export default function CalendarPage() {
                 </main>
 
                 {/* Event Modal */}
-                <EventModal 
-                    isOpen={showEventModal} 
-                    onClose={() => setShowEventModal(false)} 
+                <EventModal
+                    isOpen={showEventModal}
+                    onClose={() => setShowEventModal(false)}
                     onSuccess={handleEventSuccess}
                     event={selectedEvent}
                     mode={selectedEvent ? 'edit' : 'create'}
