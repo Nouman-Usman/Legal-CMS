@@ -1,0 +1,291 @@
+/* TipTap Editor Styles — Google Docs-like legal document editor */
+
+/* Base editor styling */
+.tiptap {
+    font-family: 'Times New Roman', 'Georgia', serif;
+    font-size: 12pt;
+    line-height: 1.75;
+    color: #1a1a2e;
+    caret-color: #3b82f6;
+}
+
+/* Ensure font size and family propagate from inline styles */
+.tiptap span[style] {
+    font-size: inherit;
+}
+
+
+.tiptap:focus {
+    outline: none;
+}
+
+/* Placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: #adb5bd;
+    pointer-events: none;
+    height: 0;
+    font-style: italic;
+}
+
+/* Headings */
+.tiptap h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    line-height: 1.3;
+    border-bottom: none;
+}
+
+.tiptap h2 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    line-height: 1.35;
+}
+
+.tiptap h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2d3748;
+    margin-top: 1em;
+    margin-bottom: 0.3em;
+    line-height: 1.4;
+}
+
+/* Paragraphs */
+.tiptap p {
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+}
+
+/* Lists */
+.tiptap ul,
+.tiptap ol {
+    margin-left: 1.5em;
+    margin-top: 0.4em;
+    margin-bottom: 0.4em;
+}
+
+.tiptap ul li,
+.tiptap ol li {
+    margin-bottom: 0.15em;
+}
+
+.tiptap ul {
+    list-style-type: disc;
+}
+
+.tiptap ol {
+    list-style-type: decimal;
+}
+
+/* Blockquote */
+.tiptap blockquote {
+    border-left: 4px solid #3b82f6;
+    background: #f0f5ff;
+    padding: 12px 20px;
+    margin: 16px 0;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: #4a5568;
+}
+
+/* Horizontal Rule */
+.tiptap hr {
+    border: none;
+    border-top: 1.5px solid #e2e8f0;
+    margin: 24px 0;
+}
+
+/* Tables */
+.tiptap table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    overflow: hidden;
+}
+
+.tiptap th,
+.tiptap td {
+    border: 1px solid #d1d5db;
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+    font-size: 13px;
+}
+
+.tiptap th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+    color: #374151;
+}
+
+.tiptap td {
+    background-color: #fff;
+}
+
+.tiptap tr:nth-child(even) td {
+    background-color: #f9fafb;
+}
+
+/* Mark / Highlight */
+.tiptap mark {
+    background-color: #fef3c7;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Bold */
+.tiptap strong {
+    font-weight: 700;
+}
+
+/* Legal Variable Placeholders */
+.tiptap .legal-variable,
+.legal-variable {
+    display: inline;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    color: #2563eb;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #bfdbfe;
+    white-space: nowrap;
+    cursor: default;
+    transition: all 0.15s ease;
+}
+
+.tiptap .legal-variable:hover,
+.legal-variable:hover {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border-color: #93c5fd;
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Signature Blocks */
+.tiptap .signature-block,
+.signature-block {
+    display: inline-block;
+    margin: 8px 0;
+    user-select: none;
+    cursor: default;
+}
+
+.tiptap .signature-block[data-type="signature"] div:first-child,
+.signature-block[data-type="signature"] div:first-child {
+    border-bottom: 2px solid #4a5568;
+    width: 300px;
+    height: 60px;
+    margin: 20px 0 5px 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    color: #a0aec0;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: repeating-linear-gradient(0deg,
+            transparent,
+            transparent 57px,
+            #e2e8f0 57px,
+            #e2e8f0 58px,
+            transparent 58px,
+            transparent 60px);
+}
+
+.tiptap .signature-block[data-type="stamp"] div:first-child,
+.signature-block[data-type="stamp"] div:first-child {
+    width: 120px;
+    height: 120px;
+    border: 3px dashed #a0aec0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a0aec0;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 15px 0;
+}
+
+/* Selection colors */
+.tiptap ::selection {
+    background-color: #b3d7ff;
+}
+
+/* Link styles */
+.tiptap a {
+    color: #3b82f6;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.tiptap a:hover {
+    color: #2563eb;
+}
+
+/* Print-friendly styling */
+@media print {
+    .tiptap {
+        font-size: 12pt;
+        color: #000;
+    }
+
+    .tiptap .legal-variable {
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        color: #333;
+    }
+}
+
+/* Custom scrollbar for editor area */
+.tiptap::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tiptap::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tiptap::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.12);
+    border-radius: 3px;
+}
+
+.tiptap::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Table resize handle */
+.tiptap .column-resize-handle {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #3b82f6;
+    cursor: col-resize;
+    z-index: 20;
+}
+
+/* Selected cells */
+.tiptap .selectedCell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(59, 130, 246, 0.1);
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* Underline */
+.tiptap u {
+    text-underline-offset: 3px;
+}
