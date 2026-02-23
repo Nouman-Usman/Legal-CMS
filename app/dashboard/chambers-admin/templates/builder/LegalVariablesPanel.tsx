@@ -365,9 +365,16 @@ export default function LegalVariablesPanel({
 
     const insertVariable = (key: string) => {
         if (!editor) return;
-        editor.chain().focus().insertContent(
-            `<span class="legal-variable" data-variable="${key}">{{${key}}}</span> `
-        ).run();
+        editor.chain().focus().insertContent([
+            {
+                type: 'legalVariable',
+                attrs: { variable: key }
+            },
+            {
+                type: 'text',
+                text: ' '
+            }
+        ]).run();
         toast.success(`Inserted {{${key}}} into document`);
     };
 
@@ -377,6 +384,21 @@ export default function LegalVariablesPanel({
             return;
         }
         if (!editor) return;
+
+        if (type === 'date_signed') {
+            editor.chain().focus().insertContent([
+                {
+                    type: 'legalVariable',
+                    attrs: { variable: 'date_signed' }
+                },
+                {
+                    type: 'text',
+                    text: ' '
+                }
+            ]).run();
+            toast.success(`Date Signed inserted`);
+            return;
+        }
 
         const signatureHtml: Record<string, string> = {
             signature: `
@@ -394,7 +416,6 @@ export default function LegalVariablesPanel({
                     </div>
                 </div>
             `,
-            date_signed: `<span class="legal-variable" data-variable="date_signed">{{date_signed}}</span> `,
             stamp: `
                 <div class="signature-block" data-type="stamp" contenteditable="false">
                     <div style="width: 120px; height: 120px; border: 3px dashed #999; border-radius: 50%; margin: 15px 0; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 11px; text-align: center;">

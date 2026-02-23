@@ -16,7 +16,9 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
+import Underline from '@tiptap/extension-underline';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
+import { Node, mergeAttributes } from '@tiptap/core';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +55,42 @@ const FontSize = Extension.create({
                     },
                 },
             },
+        ];
+    },
+});
+
+// ── Custom LegalVariable Node ──
+const LegalVariable = Node.create({
+    name: 'legalVariable',
+    group: 'inline',
+    inline: true,
+    selectable: true,
+    atom: true,
+    addAttributes() {
+        return {
+            variable: {
+                default: null,
+            },
+        };
+    },
+    parseHTML() {
+        return [
+            {
+                tag: 'span[data-variable]',
+                getAttrs: (dom: HTMLElement) => ({
+                    variable: dom.getAttribute('data-variable'),
+                }),
+            },
+        ];
+    },
+    renderHTML({ HTMLAttributes, node }) {
+        return [
+            'span',
+            mergeAttributes(HTMLAttributes, {
+                class: 'legal-variable',
+                'data-variable': node.attrs.variable,
+            }),
+            `{{${node.attrs.variable}}}`,
         ];
     },
 });
@@ -246,6 +284,8 @@ export default function TemplateBuilderContent() {
             TextStyle,
             FontFamily,
             FontSize,
+            LegalVariable,
+            Underline,
             Color,
             Table.configure({ resizable: true }),
             TableRow,
@@ -342,7 +382,8 @@ export default function TemplateBuilderContent() {
     }, [pdfFields.length]);
 
     // Save handler
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
+        const isNew = !templateId || templateId === 'new_template';
         setSaving(true);
         try {
             const templateData = {
@@ -352,13 +393,13 @@ export default function TemplateBuilderContent() {
                 mode,
             };
             const payload = {
-                id: templateId,
+                id: isNew ? undefined : templateId,
                 name: templateName,
                 fields: templateData,
                 roles: [],
                 status: 'draft',
             };
-            const method = templateId ? 'PUT' : 'POST';
+            const method = isNew ? 'POST' : 'PUT';
             const res = await fetch('/api/templates', {
                 method,
                 headers: { 'Content-Type': 'application/json' },
@@ -366,20 +407,46 @@ export default function TemplateBuilderContent() {
             });
             if (res.ok) {
                 const data = await res.json();
-                toast.success('Template saved!');
-                if (!templateId && data.template?.id) {
+                // toast.success('Template saved!'); // Optional: silent save for autosave
+                if (isNew && data.template?.id) {
                     router.replace(`/dashboard/chambers-admin/templates/builder?id=${data.template.id}`);
                 }
             } else {
                 const err = await res.json();
+                console.error('Save error:', err);
                 toast.error(err.error || 'Failed to save');
             }
-        } catch {
+        } catch (err) {
+            console.error('Failed to save:', err);
             toast.error('Failed to save template');
         } finally {
             setSaving(false);
         }
-    };
+    }, [templateId, templateName, editor, pdfFields, pdfUrl, mode, router]);
+
+    // ── Autosave Functionality (every 3 seconds) ──
+    const lastSavedData = useRef<string>('');
+
+    useEffect(() => {
+        if (!editor || loading) return;
+
+        const interval = setInterval(() => {
+            const currentData = JSON.stringify({
+                html: editor.getHTML(),
+                fields: pdfFields,
+                name: templateName,
+                mode,
+                url: pdfUrl
+            });
+
+            if (currentData !== lastSavedData.current) {
+                handleSave();
+                lastSavedData.current = currentData;
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [editor, pdfFields, templateName, mode, pdfUrl, handleSave, loading]);
 
     const applyTemplate = useCallback((content: string, name: string) => {
         if (editor) {
@@ -519,11 +586,13 @@ export default function TemplateBuilderContent() {
                         <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                             <button
                                 onClick={() => setMode('editor')}
+                                disabled={!!pdfUrl}
                                 className={cn(
                                     'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all',
                                     mode === 'editor'
                                         ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-700'
+                                        : 'text-slate-500 hover:text-slate-700',
+                                    pdfUrl && 'opacity-50 cursor-not-allowed hidden'
                                 )}
                             >
                                 <FileEdit className="w-3.5 h-3.5" />
@@ -549,17 +618,20 @@ export default function TemplateBuilderContent() {
                             </button>
                         </div>
 
-                        <div className="h-5 w-px bg-slate-200" />
+                        {/* Hidden Editor Divider - if PDF uploaded, we only show Upload button if they want to change PDF */}
+                        {!pdfUrl && <div className="h-5 w-px bg-slate-200" />}
 
                         {/* Upload button */}
-                        <Button
-                            variant="ghost" size="sm"
-                            className="text-slate-500 hover:text-slate-700 gap-1.5 h-8"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <Upload className="w-3.5 h-3.5" />
-                            <span className="text-xs">Upload</span>
-                        </Button>
+                        {!pdfUrl && (
+                            <Button
+                                variant="ghost" size="sm"
+                                className="text-slate-500 hover:text-slate-700 gap-1.5 h-8"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span className="text-xs">Upload</span>
+                            </Button>
+                        )}
 
                         {/* Templates */}
                         <div className="relative">
