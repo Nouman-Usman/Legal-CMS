@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clamp, middleCoverage, progressOf } from './motion.ts';
+import { clamp, deckCardScrollY, middleCoverage, progressOf } from './motion.ts';
 
 test('clamp keeps a value inside the range', () => {
     assert.equal(clamp(5, 0, 1), 1);
@@ -21,4 +21,11 @@ test('enter progress starts at the fold and ends 35% up the screen', () => {
 test('middle coverage is 1 when the band is covered and 0 when it is not', () => {
     assert.equal(middleCoverage({ top: 0, bottom: 1000 }, 1000), 1);
     assert.equal(middleCoverage({ top: 800, bottom: 1600 }, 1000), 0);
+});
+
+test('deck anchor scroll lands where card i has finished flipping', () => {
+    // card i is face-up from p = 0.32 + 0.16 * i of the pinned runway
+    const deck = { top: 5000, height: 2000 };
+    assert.equal(deckCardScrollY(deck, 1000, 0), 5000 + 0.32 * 1000);
+    assert.equal(deckCardScrollY(deck, 1000, 2), 5000 + 0.64 * 1000);
 });

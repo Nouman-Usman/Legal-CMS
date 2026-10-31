@@ -76,3 +76,9 @@ test('viewport-height runways only exist with motion on', () => {
 test('has a reduced-motion block', () => {
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test('a focused deck card turns face-up', () => {
+    const rule = all.find(([selector]) => selector.includes('.l-deck__card:focus-within'));
+    assert.ok(rule, 'missing .l-deck__card:focus-within rule');
+    assert.match(rule[1], /--f:\s*1/);
+});

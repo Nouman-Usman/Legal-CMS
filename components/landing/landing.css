@@ -1263,6 +1263,11 @@
         transform: translateY(calc((1 - var(--f)) * 60px)) rotateZ(calc((1 - var(--f)) * 6deg)) rotateY(calc((1 - var(--f)) * 180deg));
     }
 
+    /* Keyboard focus on a card's link turns it face-up, so the focus ring is never hidden. */
+    .has-motion .landing .l-deck__card:focus-within {
+        --f: 1;
+    }
+
     .has-motion .landing .l-deck__face {
         backface-visibility: hidden;
     }

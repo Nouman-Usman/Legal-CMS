@@ -25,3 +25,11 @@ export function middleCoverage(rect: { top: number; bottom: number }, viewport: 
     const t = clamp((bottom - top) / (viewport * 0.5), 0, 1);
     return t * t * (3 - 2 * t);
 }
+
+/** Deck card i has finished flipping from this share of the pinned runway (see the deck CSS). */
+export const DECK_FACE_UP_AT = (index: number) => 0.32 + 0.16 * index;
+
+/** Scroll position at which deck card `index` is face-up, for in-page links to a card. */
+export function deckCardScrollY(deck: { top: number; height: number }, viewport: number, index: number) {
+    return deck.top + DECK_FACE_UP_AT(index) * (deck.height - viewport);
+}

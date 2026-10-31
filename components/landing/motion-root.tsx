@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { middleCoverage, progressOf, type ProgressMode } from '@/lib/landing/motion';
+import { deckCardScrollY, middleCoverage, progressOf, type ProgressMode } from '@/lib/landing/motion';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+// Must match the pinned deck media query in landing.css.
+const PINNED_DECK_QUERY = '(min-width: 1100px) and (min-height: 700px)';
 
 /**
  * Landing page scroll choreography (ported from Techfini's MotionRoot).
@@ -87,6 +89,21 @@ export function MotionRoot() {
         );
         tracked.forEach((element) => observer.observe(element));
 
+        // In-page links to a deck card (#chambers…) would land on the pin start, where the
+        // cards are still face-down; scroll to the point where that card is face-up instead.
+        const onClick = (event: MouseEvent) => {
+            const link = (event.target as Element | null)?.closest?.('a[href^="#"]');
+            const card = link && document.getElementById(link.getAttribute('href')!.slice(1));
+            const deck = card?.closest<HTMLElement>('.l-deck');
+            if (!card || !deck || !window.matchMedia(PINNED_DECK_QUERY).matches) return;
+            event.preventDefault();
+            const rect = deck.getBoundingClientRect();
+            const index = Array.prototype.indexOf.call(card.parentElement!.children, card);
+            window.scrollTo({ top: deckCardScrollY({ top: rect.top + window.scrollY, height: rect.height }, window.innerHeight, index) });
+            history.pushState(null, '', `#${card.id}`);
+        };
+        document.addEventListener('click', onClick);
+
         window.addEventListener('scroll', request, { passive: true });
         window.addEventListener('resize', request);
         request();
@@ -100,6 +117,7 @@ export function MotionRoot() {
         return () => {
             cancelAnimationFrame(raf);
             observer.disconnect();
+            document.removeEventListener('click', onClick);
             window.removeEventListener('scroll', request);
             window.removeEventListener('resize', request);
             reducedMotion.removeEventListener('change', onPreference);
