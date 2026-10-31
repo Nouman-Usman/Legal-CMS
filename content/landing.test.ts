@@ -34,3 +34,17 @@ test('never links a lawyer signup or the mock lawyer directory', () => {
         assert.ok(!s.includes('find-lawyers'), s);
     }
 });
+
+test('audience cards route each role correctly', () => {
+    const cards = landing.audiences.cards;
+    assert.deepEqual(
+        cards.map((c) => c.id),
+        ['chambers', 'lawyers', 'clients'],
+    );
+    const byId = Object.fromEntries(cards.map((c) => [c.id, c]));
+    assert.equal(byId.chambers.cta.href, '/auth/signup?role=chamber_admin');
+    assert.equal(byId.clients.cta.href, '/auth/signup?role=client');
+    assert.equal(byId.lawyers.cta.href, '/auth/signup?role=chamber_admin');
+    assert.equal(byId.lawyers.secondary?.href, '/auth/login');
+    for (const card of cards) assert.equal(card.features.length, 4);
+});

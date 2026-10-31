@@ -1069,6 +1069,7 @@
         position: sticky;
         top: 0;
         min-height: 100svh;
+        padding-block: 96px 32px;
         justify-content: center;
         box-sizing: border-box;
     }
@@ -1120,5 +1121,160 @@
     .has-motion .landing .l-journey__steps li {
         position: relative;
         opacity: calc(0.32 + 0.68 * clamp(0, (var(--jp) * 4 - var(--i)) * 5 + 1, 1));
+    }
+}
+
+/* ─── three sides: chambers, lawyers, clients ─── */
+.landing .l-deck__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+
+.landing .l-deck__card {
+    position: relative;
+    scroll-margin-top: 96px;
+}
+
+.landing .l-deck__face {
+    box-sizing: border-box;
+    border-radius: 22px;
+    background: var(--l-surface-1);
+    border: 1px solid var(--l-surface-3);
+}
+
+.landing .l-deck__front {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+    padding: 28px;
+}
+
+.landing .l-deck__card[data-featured='true'] .l-deck__front {
+    border-color: var(--l-hairline-aurora);
+}
+
+.landing .l-deck__card[data-featured='true'] .l-deck__meta {
+    color: var(--l-lime);
+}
+
+.landing .l-deck__meta {
+    display: flex;
+    justify-content: space-between;
+}
+
+.landing .l-deck__title {
+    margin: 0;
+    font-size: clamp(2rem, 1.6rem + 1.4vw, 2.5rem);
+    font-weight: 650;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
+}
+
+.landing .l-deck__front ul {
+    margin: auto 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.landing .l-deck__front li {
+    padding: 14px 0;
+    border-top: 1px solid var(--l-surface-3);
+    font-size: 15px;
+}
+
+.landing .l-deck__front li:last-child {
+    border-bottom: 1px solid var(--l-surface-3);
+}
+
+.landing .l-deck__front .l-btn {
+    min-height: 48px;
+    height: auto;
+    padding-block: 12px;
+    text-align: center;
+}
+
+.landing .l-deck__secondary {
+    align-self: center;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    color: var(--l-muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.landing .l-deck__secondary:is(:hover, :focus-visible) {
+    color: var(--l-ink);
+}
+
+/* The back is only ever seen mid-flip on desktop. */
+.landing .l-deck__back {
+    display: none;
+}
+
+@media (min-width: 900px) {
+    .landing .l-deck__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+    }
+}
+
+/* Phones and tablets: cards rise in. */
+.has-motion .landing .l-deck__card {
+    --r: clamp(0, var(--p, 1) * 2, 1);
+
+    opacity: var(--r);
+    transform: translateY(calc((1 - var(--r)) * 40px));
+}
+
+/* Desktop: the pinned flip deck. Card i flips over 0.24 of the pin, starting 0.16 apart. */
+@media (min-width: 1100px) and (min-height: 700px) {
+    .has-motion .landing .l-deck {
+        height: 240svh;
+        padding-block: 0;
+    }
+
+    .has-motion .landing .l-deck__sticky {
+        position: sticky;
+        top: 0;
+        min-height: 100svh;
+        padding-block: 96px 32px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .has-motion .landing .l-deck__grid {
+        --dp: var(--p, 0);
+
+        perspective: 1600px;
+    }
+
+    .has-motion .landing .l-deck__card {
+        --f: clamp(0, (var(--dp) - 0.08 - var(--i) * 0.16) / 0.24, 1);
+
+        opacity: 1;
+        transform-style: preserve-3d;
+        transform: translateY(calc((1 - var(--f)) * 60px)) rotateZ(calc((1 - var(--f)) * 6deg)) rotateY(calc((1 - var(--f)) * 180deg));
+    }
+
+    .has-motion .landing .l-deck__face {
+        backface-visibility: hidden;
+    }
+
+    .has-motion .landing .l-deck__back {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-image: radial-gradient(circle, rgb(245 245 242 / 0.12) 1px, transparent 1.5px);
+        background-size: 22px 22px;
+        transform: rotateY(180deg);
     }
 }

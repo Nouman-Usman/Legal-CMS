@@ -77,6 +77,37 @@ export const landing = {
             { title: 'Closure', body: '[Billing, archive, appeal if any]' },
         ],
     },
+    audiences: {
+        eyebrow: 'One system, three sides',
+        title: 'Built for every side of the case.',
+        backLabel: 'Card flipping in',
+        cards: [
+            {
+                id: 'chambers',
+                label: '01 · For chambers',
+                title: ['Run the', 'firm.'],
+                features: ['Lawyer roster and case assignment', 'Firm-wide hearing calendar', 'Oversight of every open case', 'Invite lawyers by email'],
+                cta: { label: 'Set up your chamber', href: '/auth/signup?role=chamber_admin' },
+                secondary: null,
+            },
+            {
+                id: 'lawyers',
+                label: '02 · For lawyers',
+                title: ['Run the', 'cases.'],
+                features: ['Case files, hearings and tasks', 'Drafting from legal templates', 'Case law research', 'Messages with clients'],
+                cta: { label: '[DRAFT] Practising on your own? Start your chamber.', href: '/auth/signup?role=chamber_admin' },
+                secondary: { label: '[DRAFT] Invited by your chamber? Sign in', href: '/auth/login' },
+            },
+            {
+                id: 'clients',
+                label: '03 · For clients',
+                title: ['Know where', 'it stands.'],
+                features: ['Find a lawyer', 'Case status and next date', 'Secure messages', 'Shared documents'],
+                cta: { label: 'Find legal help', href: '/auth/signup?role=client' },
+                secondary: null,
+            },
+        ],
+    },
     product: {
         eyebrow: 'The product',
         title: 'Your day, on one screen.',

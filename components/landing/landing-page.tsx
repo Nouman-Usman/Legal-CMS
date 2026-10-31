@@ -1,4 +1,5 @@
 import { Manrope } from 'next/font/google';
+import { Audiences } from './audiences';
 import { Header } from './header';
 import { Hero } from './hero';
 import { Journey } from './journey';
@@ -21,6 +22,7 @@ export function LandingPage() {
                 <Hero />
                 <Problem />
                 <Journey />
+                <Audiences />
             </main>
         </div>
     );
