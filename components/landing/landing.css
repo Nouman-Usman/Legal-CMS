@@ -746,3 +746,379 @@
         transform: translate(-50%, -50%) scale(calc(0.92 + 0.08 * var(--a)));
     }
 }
+
+/* ─── problem: where cases get lost ─── */
+.landing .l-track {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin-bottom: 48px;
+    padding-left: 32px;
+}
+
+.landing .l-track::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--l-hairline);
+}
+
+/* The lane is the line's length; the run inside slides from -100% to 0 with the dot at its far end. */
+.landing .l-track__lane {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 16px;
+    width: 16px;
+}
+
+.landing .l-track__run {
+    position: absolute;
+    inset: 0;
+}
+
+.landing .l-track__run::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--l-lime);
+    box-shadow: 0 0 22px rgb(205 251 80 / 0.5);
+}
+
+.landing .l-track__stop {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--l-muted);
+}
+
+.landing .l-track__dot {
+    position: absolute;
+    left: -30px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--l-hairline-strong);
+    background: var(--l-space);
+}
+
+.landing .l-track__stop[data-lost='true'] .l-track__dot::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: var(--l-violet);
+    opacity: 0;
+}
+
+.landing .l-compare {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+
+.landing .l-compare__card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 28px;
+    border-radius: 30px;
+}
+
+.landing .l-compare__card[data-featured='true'] {
+    border-color: var(--l-hairline-aurora);
+}
+
+.landing .l-compare__card[data-featured='true'] > .l-label {
+    color: var(--l-lime);
+}
+
+.landing .l-compare__card ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 640px) {
+    .landing .l-track {
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 36px 0 0;
+    }
+
+    .landing .l-track::before {
+        left: 0;
+        right: 0;
+        top: 7px;
+        bottom: auto;
+        width: auto;
+        height: 2px;
+    }
+
+    .landing .l-track__lane {
+        left: 0;
+        right: 16px;
+        top: 0;
+        bottom: auto;
+        width: auto;
+        height: 16px;
+    }
+
+    .landing .l-track__run::after {
+        left: auto;
+        right: -16px;
+        bottom: 0;
+    }
+
+    .landing .l-track__stop {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .landing .l-track__stop:last-child {
+        align-items: flex-end;
+    }
+
+    .landing .l-track__dot {
+        left: 0;
+        top: -34px;
+    }
+
+    .landing .l-track__stop:last-child .l-track__dot {
+        left: auto;
+        right: 0;
+    }
+
+    .landing .l-compare__card {
+        padding: 40px;
+    }
+}
+
+@media (min-width: 900px) {
+    .landing .l-compare {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+    }
+}
+
+.has-motion .landing .l-track__run {
+    animation: l-run-down 5s var(--l-ease) infinite;
+}
+
+.has-motion .landing .l-track__stop[data-lost='true'] .l-track__dot::after {
+    animation: l-lost 5s ease-in infinite;
+}
+
+.has-motion .landing .l-track__stop:nth-child(4) .l-track__dot::after {
+    animation-delay: 1.2s;
+}
+
+@media (min-width: 640px) {
+    .has-motion .landing .l-track__run {
+        animation-name: l-run-across;
+    }
+}
+
+@keyframes l-run-down {
+    0% {
+        transform: translateY(-100%);
+    }
+    80%,
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes l-run-across {
+    0% {
+        transform: translateX(-100%);
+    }
+    80%,
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@keyframes l-lost {
+    0%,
+    35% {
+        opacity: 0;
+        transform: translate(0, 0);
+    }
+    45% {
+        opacity: 1;
+    }
+    75%,
+    100% {
+        opacity: 0;
+        transform: translate(14px, 48px);
+    }
+}
+
+/* ─── journey: how a case moves ─── */
+.landing .l-journey__sticky {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.landing .l-journey__head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.landing .l-journey__head .l-section-head {
+    margin-bottom: 0;
+}
+
+.landing .l-journey__head .l-body {
+    max-width: 460px;
+}
+
+.landing .l-journey__road,
+.landing .l-journey__lane {
+    display: none;
+}
+
+.landing .l-journey__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.landing .l-journey__steps li {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 6px;
+}
+
+.landing .l-journey__num {
+    grid-row: span 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--l-lime);
+    color: var(--l-on-lime);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.landing .l-journey__title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
+}
+
+/* Phones: each step brightens as it scrolls in. */
+.has-motion .landing .l-journey__steps li {
+    opacity: calc(0.32 + 0.68 * clamp(0, (var(--p, 1) - 0.35) * 4, 1));
+    transition: opacity 200ms linear;
+}
+
+@media (min-width: 900px) {
+    .landing .l-journey__head {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 32px;
+    }
+
+    .landing .l-journey__steps {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 24px;
+    }
+
+    .landing .l-journey__steps li {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+}
+
+/* Desktop: a pinned runway; the marker travels and steps light as it passes. */
+@media (min-width: 900px) and (min-height: 640px) {
+    .has-motion .landing .l-journey {
+        height: 260svh;
+        padding-block: 0;
+    }
+
+    .has-motion .landing .l-journey__sticky {
+        position: sticky;
+        top: 0;
+        min-height: 100svh;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .has-motion .landing .l-journey__rail {
+        --jp: var(--p, 0);
+
+        position: relative;
+        padding-top: 0;
+    }
+
+    .has-motion .landing .l-journey__road {
+        position: relative;
+        display: block;
+        height: 110px;
+        overflow: hidden;
+        background: var(--l-surface-1);
+        clip-path: polygon(36% 0, 64% 0, 100% 100%, 0 100%);
+    }
+
+    .has-motion .landing .l-journey__road span {
+        position: absolute;
+        left: calc(50% - 1.5px);
+        top: -480px;
+        width: 3px;
+        height: 1200px;
+        background: repeating-linear-gradient(to bottom, #626262 0 24px, transparent 24px 48px);
+        transform: translateY(calc(var(--p, 0) * 480px));
+    }
+
+    .has-motion .landing .l-journey__lane {
+        position: absolute;
+        display: block;
+        left: 0;
+        right: 0;
+        top: 23px;
+        height: 2px;
+        overflow: hidden;
+        background: var(--l-hairline);
+    }
+
+    .has-motion .landing .l-journey__run {
+        position: absolute;
+        inset: 0;
+        background: var(--l-lime);
+        transform: translateX(calc((var(--jp) - 1) * 100%));
+    }
+
+    .has-motion .landing .l-journey__steps li {
+        position: relative;
+        opacity: calc(0.32 + 0.68 * clamp(0, (var(--jp) * 4 - var(--i)) * 5 + 1, 1));
+    }
+}

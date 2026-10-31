@@ -1,7 +1,9 @@
 import { Manrope } from 'next/font/google';
 import { Header } from './header';
 import { Hero } from './hero';
+import { Journey } from './journey';
 import { MotionRoot } from './motion-root';
+import { Problem } from './problem';
 import './landing.css';
 
 const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' });
@@ -17,6 +19,8 @@ export function LandingPage() {
             <Header />
             <main>
                 <Hero />
+                <Problem />
+                <Journey />
             </main>
         </div>
     );
