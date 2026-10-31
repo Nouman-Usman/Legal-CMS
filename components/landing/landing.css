@@ -294,3 +294,455 @@
         transition: none !important;
     }
 }
+
+/* ─── header ─── */
+.landing .l-header {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 50;
+    padding: 8px var(--l-gutter);
+}
+
+.landing .l-header__bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 1460px;
+    min-height: 56px;
+    margin-inline: auto;
+    padding: 0 6px 0 12px;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    transition: background-color 320ms var(--l-ease), border-color 320ms var(--l-ease);
+}
+
+.landing .l-header[data-scrolled='true'] .l-header__bar {
+    background: var(--l-surface-1);
+    border-color: var(--l-hairline);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+    .landing .l-header[data-scrolled='true'] .l-header__bar {
+        background: rgb(17 17 17 / 0.92);
+        backdrop-filter: blur(20px) saturate(180%);
+    }
+}
+
+.landing .l-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    margin-right: auto;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+}
+
+.landing .l-header__brand b {
+    font-weight: 700;
+}
+
+.landing .l-header__nav,
+.landing .l-header__cta {
+    display: none;
+}
+
+.landing .l-header__nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.landing .l-header__nav a:is(:hover, :focus-visible) {
+    background: var(--l-surface-2);
+}
+
+.landing .l-header__menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--l-ink);
+    color: var(--l-on-lime);
+    cursor: pointer;
+}
+
+.landing .l-sheet {
+    width: min(100% - 2rem, 420px);
+    margin: 12px auto auto;
+    padding: 20px;
+    border: 1px solid var(--l-hairline);
+    border-radius: 30px;
+    background: var(--l-surface-1);
+    color: var(--l-ink);
+    font-family: inherit;
+}
+
+.landing .l-sheet::backdrop {
+    background: rgb(8 8 8 / 0.6);
+}
+
+.landing .l-sheet[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.landing .l-sheet__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.landing .l-sheet__nav {
+    display: flex;
+    flex-direction: column;
+}
+
+.landing .l-sheet__nav a {
+    padding: 14px 0;
+    border-top: 1px solid var(--l-hairline);
+    font-size: clamp(1.375rem, 1.05rem + 1vw, 2rem);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
+}
+
+@media (min-width: 480px) {
+    .landing .l-header__cta {
+        display: inline-flex;
+    }
+}
+
+@media (min-width: 900px) {
+    .landing .l-header__nav {
+        display: flex;
+        gap: 2px;
+    }
+
+    .landing .l-header__menu {
+        display: none;
+    }
+}
+
+/* ─── hero (1C): paperwork gathers into one case file ─── */
+.landing .l-hero {
+    background: radial-gradient(60% 55% at 72% 45%, rgb(60 28 126 / 0.6), transparent 70%), var(--l-canvas);
+}
+
+.landing .l-hero__sticky {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    padding-top: 104px;
+    padding-bottom: 64px;
+}
+
+.landing .l-hero__grid {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.landing .l-hero__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.landing .l-hero__accent {
+    position: relative;
+    display: inline-block;
+    color: var(--l-lime);
+}
+
+.landing .l-hero__accent svg {
+    position: absolute;
+    left: 0;
+    bottom: -0.16em;
+    width: 100%;
+    height: 0.14em;
+    overflow: visible;
+}
+
+.landing .l-hero__accent path {
+    fill: none;
+    stroke: var(--l-violet);
+    stroke-width: 4;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.landing .l-hero__urdu {
+    margin: 0;
+    font-size: 22px;
+    color: #c9c2da;
+}
+
+.landing .l-hero__stage {
+    --stage-h: 380px;
+
+    position: relative;
+    height: var(--stage-h);
+}
+
+.landing .l-scrap {
+    --g: 1;
+
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    font-size: 12px;
+    line-height: 1.6;
+    opacity: 0;
+    box-shadow: 0 20px 40px -16px #000;
+}
+
+.landing .l-scrap--diary {
+    --tx: 70px;
+    --ty: 90px;
+    --r: -12deg;
+
+    left: 0;
+    top: 0;
+    width: 150px;
+    padding: 14px;
+    border-radius: 6px;
+    background: #ede6d3;
+    color: #3a2f1e;
+}
+
+.landing .l-scrap--whatsapp {
+    --tx: -70px;
+    --ty: 110px;
+    --r: 8deg;
+
+    right: 0;
+    top: 6px;
+    width: 160px;
+    padding: 12px 14px;
+    border-radius: 14px 14px 14px 4px;
+    background: #1f3b2c;
+    color: #e6f4ea;
+    font-size: 13px;
+}
+
+.landing .l-scrap--folder {
+    --tx: -70px;
+    --ty: -90px;
+    --r: 14deg;
+
+    right: 0;
+    bottom: 0;
+    width: 140px;
+    height: 100px;
+    justify-content: flex-end;
+    padding: 12px;
+    border-radius: 4px 14px 4px 4px;
+    background: #c9a15b;
+    color: #2b1e08;
+    font-weight: 700;
+}
+
+.landing .l-scrap--list {
+    --tx: 70px;
+    --ty: -80px;
+    --r: -6deg;
+
+    left: 0;
+    bottom: 0;
+    width: 160px;
+    padding: 12px;
+    border-radius: 6px;
+    background: var(--l-ink);
+    color: var(--l-canvas);
+}
+
+.landing .l-hero__card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(320px, 92%);
+    padding: 22px;
+    border-color: var(--l-hairline-aurora);
+    box-shadow: 0 40px 80px -24px rgb(189 108 247 / 0.45);
+    transform: translate(-50%, -50%);
+}
+
+.landing .l-hero__card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.landing .l-hero__card-title {
+    margin: 12px 0 8px;
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+}
+
+.landing .l-hero__card dl {
+    margin: 0;
+    font-size: 13px;
+}
+
+.landing .l-hero__card dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--l-hairline);
+}
+
+.landing .l-hero__card dt {
+    color: var(--l-muted);
+}
+
+.landing .l-hero__card dd {
+    margin: 0;
+    text-align: right;
+}
+
+.landing .l-hero__card dd[data-accent='true'] {
+    color: var(--l-lime);
+    font-weight: 600;
+}
+
+.landing .l-hero__foot {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.landing .l-hero__foot .l-body-lg {
+    max-width: 540px;
+}
+
+.landing .l-hero__ctas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+@media (min-width: 640px) {
+    .landing .l-hero__stage {
+        --stage-h: 460px;
+    }
+
+    .landing .l-scrap--diary,
+    .landing .l-scrap--list {
+        --tx: 140px;
+    }
+
+    .landing .l-scrap--whatsapp,
+    .landing .l-scrap--folder {
+        --tx: -140px;
+    }
+
+    .landing .l-hero__ctas {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .landing .l-hero__foot {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+}
+
+@media (min-width: 1100px) {
+    .landing .l-hero__grid {
+        flex-direction: row;
+        align-items: center;
+        gap: 48px;
+    }
+
+    .landing .l-hero__copy {
+        flex: 1 1 0;
+    }
+
+    .landing .l-hero__stage {
+        --stage-h: min(540px, 58svh);
+
+        flex: 1 1 0;
+    }
+
+    .landing .l-hero .l-h1 {
+        font-size: clamp(2.375rem, 0.4rem + 6vw, 7.25rem);
+    }
+}
+
+/* Phones and tablets: the gather plays once on load. */
+.has-motion .landing .l-scrap {
+    transform: translate(calc(var(--tx) * var(--g)), calc(var(--ty) * var(--g))) rotate(calc(var(--r) * (1 - var(--g))))
+        scale(calc(1 - 0.6 * var(--g)));
+    opacity: calc(1 - var(--g));
+    animation: l-gather 1.4s var(--l-ease) 0.5s both;
+}
+
+.has-motion .landing .l-hero__card {
+    animation: l-arrive 1s var(--l-ease) 1.1s both;
+}
+
+@keyframes l-gather {
+    from {
+        --g: 0;
+        transform: translate(0, 0) rotate(var(--r)) scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: translate(var(--tx), var(--ty)) rotate(0) scale(0.4);
+        opacity: 0;
+    }
+}
+
+@keyframes l-arrive {
+    from {
+        opacity: 0.25;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+}
+
+/* Desktop: the gather is scrubbed by scroll over a short pinned runway. */
+@media (min-width: 1100px) {
+    .has-motion .landing .l-hero {
+        height: 180svh;
+    }
+
+    .has-motion .landing .l-hero__sticky {
+        position: sticky;
+        top: 0;
+        min-height: 100svh;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .has-motion .landing .l-scrap {
+        --g: clamp(0, var(--p, 0) * 2.5, 1);
+
+        animation: none;
+    }
+
+    .has-motion .landing .l-hero__card {
+        --a: clamp(0, (var(--p, 0) - 0.25) * 4, 1);
+
+        animation: none;
+        opacity: calc(0.25 + 0.75 * var(--a));
+        transform: translate(-50%, -50%) scale(calc(0.92 + 0.08 * var(--a)));
+    }
+}

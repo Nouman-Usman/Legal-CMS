@@ -1,4 +1,6 @@
 import { Manrope } from 'next/font/google';
+import { Header } from './header';
+import { Hero } from './hero';
 import { MotionRoot } from './motion-root';
 import './landing.css';
 
@@ -12,6 +14,10 @@ export function LandingPage() {
         <div className={`landing ${manrope.variable}`}>
             <script dangerouslySetInnerHTML={{ __html: MOTION_SCRIPT }} />
             <MotionRoot />
+            <Header />
+            <main>
+                <Hero />
+            </main>
         </div>
     );
 }
