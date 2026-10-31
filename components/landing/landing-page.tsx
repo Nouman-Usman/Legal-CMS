@@ -1,0 +1,17 @@
+import { Manrope } from 'next/font/google';
+import { MotionRoot } from './motion-root';
+import './landing.css';
+
+const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' });
+
+// Runs before paint on a full page load; MotionRoot does the same after client navigation.
+const MOTION_SCRIPT = `if(!matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.classList.add("has-motion")`;
+
+export function LandingPage() {
+    return (
+        <div className={`landing ${manrope.variable}`}>
+            <script dangerouslySetInnerHTML={{ __html: MOTION_SCRIPT }} />
+            <MotionRoot />
+        </div>
+    );
+}

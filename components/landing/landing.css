@@ -1,0 +1,296 @@
+/*
+ * Landing page styles. Techfini Solutions design system (codebloom DESIGN.md v3),
+ * scoped to `.landing` so the dashboards keep the app's own theme. Mobile first:
+ * base rules are the phone layout, `min-width` queries enhance upward. Everything
+ * pinned or progress-driven lives under `.has-motion .landing`; without it the page
+ * is a complete static layout.
+ */
+
+/* ─── tokens ─── */
+.landing {
+    --l-canvas: #080808;
+    --l-surface-1: #111111;
+    --l-surface-2: #1a1a1a;
+    --l-surface-3: #272727;
+    --l-space: #3c1c7e;
+    --l-gradient-space: radial-gradient(95% 75% at 88% 0%, rgb(189 108 247 / 0.45) 0%, transparent 62%),
+        radial-gradient(60% 50% at 10% 30%, rgb(8 8 8 / 0.18) 0%, transparent 70%), #3c1c7e;
+    --l-lime: #cdfb50;
+    --l-lime-hover: #d9ff6e;
+    --l-lime-soft: rgb(205 251 80 / 0.14);
+    --l-violet: #bd6cf7;
+    --l-violet-soft: rgb(189 108 247 / 0.16);
+    --l-violet-text: #d9b3fb;
+    --l-ink: #f5f5f2;
+    --l-on-lime: #080808;
+    --l-muted: #929292;
+    --l-hairline: #272727;
+    --l-hairline-strong: #626262;
+    --l-hairline-aurora: rgb(205 251 80 / 0.45);
+    --l-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --l-gutter: clamp(1rem, 4vw, 4rem);
+
+    position: relative;
+    isolation: isolate;
+    overflow-x: clip;
+    background: var(--l-canvas);
+    color: var(--l-ink);
+    font-family: var(--font-manrope), system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.landing ::selection {
+    background: var(--l-lime);
+    color: var(--l-on-lime);
+}
+
+.landing :focus-visible {
+    outline: 3px solid var(--l-lime);
+    outline-offset: 2px;
+}
+
+.landing a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* ─── purple fade: a fixed layer behind the content ─── */
+.landing .space-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: var(--l-gradient-space);
+    opacity: var(--space, 0);
+    pointer-events: none;
+}
+
+.landing > :not(.space-layer) {
+    position: relative;
+    z-index: 1;
+}
+
+/* ─── layout ─── */
+.landing .l-container {
+    width: 100%;
+    max-width: 1460px;
+    margin-inline: auto;
+    padding-inline: var(--l-gutter);
+    box-sizing: border-box;
+}
+
+.landing .l-band {
+    padding-block: 80px;
+}
+
+/* Purple bands paint themselves; with motion the space layer fades the page instead. */
+.landing .l-band--space {
+    --l-muted: #c9c2da;
+    --l-hairline: rgb(245 245 242 / 0.18);
+    --l-hairline-strong: rgb(245 245 242 / 0.45);
+
+    background: var(--l-gradient-space);
+}
+
+.has-motion .landing .l-band--space {
+    background: transparent;
+}
+
+.landing .l-section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 48px;
+}
+
+/* ─── type ─── */
+.landing .l-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--l-lime);
+}
+
+.landing .l-eyebrow::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--l-lime);
+    box-shadow: 0 0 0 4px var(--l-lime-soft);
+}
+
+.landing .l-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--l-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.landing .l-h1,
+.landing .l-h2,
+.landing .l-h3 {
+    margin: 0;
+    font-weight: 650;
+    text-transform: uppercase;
+}
+
+.landing .l-h1 {
+    font-size: clamp(2.375rem, 0.4rem + 7.4vw, 8.75rem);
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+}
+
+.landing .l-h2 {
+    font-size: clamp(1.875rem, 0.9rem + 3.4vw, 4.5rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+}
+
+.landing .l-h3 {
+    font-size: clamp(1.375rem, 1.05rem + 1vw, 2rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+}
+
+.landing .l-body-lg {
+    margin: 0;
+    font-size: clamp(1.1875rem, 1.05rem + 0.55vw, 1.625rem);
+    font-weight: 500;
+    line-height: 1.42;
+}
+
+.landing .l-body {
+    margin: 0;
+    font-size: clamp(1rem, 0.96rem + 0.18vw, 1.125rem);
+    line-height: 1.55;
+    color: var(--l-muted);
+}
+
+.landing .l-urdu {
+    font-family: var(--font-noto-nastaliq), serif;
+    font-weight: 700;
+    line-height: 2.2;
+    text-align: left;
+}
+
+/* ─── buttons ─── */
+.landing .l-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 24px;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: transform 200ms var(--l-ease), background-color 200ms var(--l-ease), color 200ms var(--l-ease);
+}
+
+.landing .l-btn--compact {
+    min-height: 44px;
+    padding: 0 20px;
+}
+
+.landing .l-btn--primary {
+    background: var(--l-lime);
+    color: var(--l-on-lime);
+}
+
+.landing .l-btn--primary:is(:hover, :focus-visible) {
+    background: var(--l-lime-hover);
+    transform: translateY(-2px);
+}
+
+.landing .l-btn--outline {
+    border: 1.5px solid var(--l-ink);
+    color: var(--l-ink);
+}
+
+.landing .l-btn--outline:is(:hover, :focus-visible) {
+    background: var(--l-ink);
+    color: var(--l-on-lime);
+}
+
+.landing .l-btn:active {
+    transform: scale(0.98);
+}
+
+/* ─── chips and cards ─── */
+.landing .l-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    background: var(--l-surface-2);
+    border: 1px solid var(--l-hairline);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.landing .l-chip--lime {
+    background: var(--l-lime-soft);
+    border-color: transparent;
+    color: var(--l-lime);
+}
+
+.landing .l-chip--violet {
+    background: var(--l-violet-soft);
+    border-color: transparent;
+    color: var(--l-violet-text);
+}
+
+.landing .l-card {
+    background: var(--l-surface-1);
+    border: 1px solid var(--l-surface-3);
+    border-radius: 22px;
+}
+
+/* ─── wave heading: letters rise in as it scrolls in ─── */
+.landing .wave__word {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.landing .wave__char {
+    display: inline-block;
+}
+
+.has-motion .landing .wave {
+    perspective: 700px;
+}
+
+/* o: 1 = still waiting below, 0 = in place; later letters start later. */
+.has-motion .landing .wave__char {
+    --o: calc(1 - clamp(0, var(--p, 1) * 3 - var(--at), 1));
+
+    opacity: calc(1 - var(--o) * 0.65);
+    transform: translateY(calc(var(--o) * 0.5em)) rotateX(calc(var(--o) * -60deg));
+    transform-origin: 50% 100%;
+}
+
+@media (min-width: 640px) {
+    .landing .l-band {
+        padding-block: 120px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing *,
+    .landing *::before,
+    .landing *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
