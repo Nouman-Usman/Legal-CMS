@@ -22,7 +22,6 @@ import {
     MessageSquare,
     FolderOpen,
     Zap,
-    Scale,
     History,
     Bell,
     User as UserIcon,
@@ -32,6 +31,7 @@ import {
     Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LogoMark } from '@/components/shared/logo-mark';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -168,9 +168,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             <div className="flex items-center gap-4 px-6 h-28 shrink-0 relative">
                 <div className="relative group">
                     <div className="absolute -inset-1 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition-opacity duration-500" />
-                    <div className="relative w-12 h-12 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center shadow-2xl">
-                        <Scale className="w-6 h-6 text-blue-400" />
-                    </div>
+                    <LogoMark className="relative w-12 h-12 shadow-2xl" />
                 </div>
                 {!isCollapsed && (
                     <div className="flex flex-col animate-in fade-in slide-in-from-left-4 duration-500">

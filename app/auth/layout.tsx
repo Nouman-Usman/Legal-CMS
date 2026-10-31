@@ -1,6 +1,7 @@
 import React from 'react';
-import { Scale, Shield, Landmark, Gavel, Sparkles } from 'lucide-react';
+import { Shield, Landmark, Gavel, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { LogoMark } from '@/components/shared/logo-mark';
 
 export default function AuthLayout({
     children,
@@ -18,12 +19,13 @@ export default function AuthLayout({
                 {/* Content */}
                 <div className="relative z-10">
                     <Link href="/" className="flex items-center gap-2 group">
-                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">
-                            <Scale className="w-6 h-6 text-white" />
+                        <LogoMark className="w-10 h-10 shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform" />
+                        <div className="flex flex-col">
+                            <h1 className="text-2xl font-extrabold tracking-tight uppercase whitespace-nowrap leading-none">
+                                APNA <span className="text-blue-500">WAQEEL</span>
+                            </h1>
+                            <span lang="ur" dir="rtl" className="font-urdu text-sm leading-[2] text-slate-300 text-left not-italic">اپنا وکیل</span>
                         </div>
-                        <h1 className="text-2xl font-black italic tracking-tighter uppercase whitespace-nowrap">
-                            APNA <span className="text-blue-500">WAQEEL</span>
-                        </h1>
                     </Link>
                     <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 text-slate-400 font-black text-[8px] uppercase tracking-[0.2em] border border-white/10 backdrop-blur-md italic">
                         <Sparkles className="w-3 h-3 text-blue-400" />
@@ -80,10 +82,8 @@ export default function AuthLayout({
                     {/* Mobile Logo */}
                     <div className="lg:hidden flex justify-center mb-12">
                         <Link href="/" className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                                <Scale className="w-5 h-5 text-white" />
-                            </div>
-                            <h1 className="text-xl font-black italic tracking-tighter uppercase whitespace-nowrap">
+                            <LogoMark className="w-8 h-8" />
+                            <h1 className="text-xl font-extrabold tracking-tight uppercase whitespace-nowrap">
                                 APNA <span className="text-blue-600">WAQEEL</span>
                             </h1>
                         </Link>

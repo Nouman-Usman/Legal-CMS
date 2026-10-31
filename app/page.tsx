@@ -16,10 +16,10 @@ import {
   ChevronRight,
   ArrowRight,
   Sparkles,
-  Building2,
-  Scale
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LogoMark } from '@/components/shared/logo-mark';
 
 export default function LandingPage() {
   return (
@@ -28,10 +28,8 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-black/[0.03] dark:border-white/[0.03] rounded-[24px] px-8 py-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Scale className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-black italic tracking-tighter uppercase">APNA <span className="text-blue-600">WAQEEL</span></h1>
+            <LogoMark className="w-8 h-8" />
+            <h1 className="text-xl font-extrabold tracking-tight uppercase">APNA <span className="text-blue-600">WAQEEL</span></h1>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/auth/login">
@@ -263,10 +261,8 @@ export default function LandingPage() {
       <footer className="px-6 py-16 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 italic">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 italic">
           <div className="flex items-center gap-2 italic">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center italic">
-              <Scale className="w-4 h-4 text-white italic" />
-            </div>
-            <h1 className="text-lg font-black italic tracking-tighter uppercase italic">APNA <span className="text-blue-600 italic">WAQEEL</span></h1>
+            <LogoMark className="w-6 h-6" />
+            <h1 className="text-lg font-extrabold tracking-tight uppercase not-italic">APNA <span className="text-blue-600">WAQEEL</span></h1>
           </div>
           <div className="flex flex-wrap justify-center gap-8 text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
             <Link href="#" className="hover:text-blue-600 transition-colors">Integrations</Link>
