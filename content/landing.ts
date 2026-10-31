@@ -124,6 +124,51 @@ export const landing = {
             { time: '14:00', caseTitle: '[Case title D]', court: 'Family Court', stage: 'Filing', tone: 'plain', lawyer: '[Lawyer]' },
         ],
     },
+    getStarted: {
+        eyebrow: 'Get started',
+        title: ['[DRAFT] Ready before', 'your next hearing.'],
+        rows: [
+            { label: 'I run a chamber', href: '/auth/signup?role=chamber_admin', note: null },
+            {
+                label: "I'm a lawyer",
+                href: '/auth/signup?role=chamber_admin',
+                note: { label: '[DRAFT] Invited by your chamber? Sign in', href: '/auth/login' },
+            },
+            { label: 'I need a lawyer', href: '/auth/signup?role=client', note: null },
+        ],
+    },
+    footer: {
+        columns: [
+            {
+                title: 'Product',
+                links: [
+                    { label: 'For chambers', href: '#chambers' },
+                    { label: 'For lawyers', href: '#lawyers' },
+                    { label: 'For clients', href: '#clients' },
+                    { label: 'How it works', href: '#how-it-works' },
+                ],
+            },
+            {
+                title: 'Account',
+                links: [
+                    { label: 'Sign in', href: '/auth/login' },
+                    { label: 'Create account', href: '/auth/signup' },
+                ],
+            },
+            {
+                title: 'Contact',
+                links: [
+                    { label: '[EMAIL]', href: '[EMAIL]' },
+                    { label: '[PHONE / WHATSAPP]', href: '[PHONE]' },
+                ],
+            },
+        ],
+        legal: [
+            { label: '[PRIVACY]', href: '[PRIVACY]' },
+            { label: '[TERMS]', href: '[TERMS]' },
+        ],
+        credit: 'Apna Waqeel · A Techfini Solutions product',
+    },
     courts: {
         label: 'Courts',
         pause: 'Pause courts marquee',

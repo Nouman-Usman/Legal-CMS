@@ -48,3 +48,22 @@ test('audience cards route each role correctly', () => {
     assert.equal(byId.lawyers.secondary?.href, '/auth/login');
     for (const card of cards) assert.equal(card.features.length, 4);
 });
+
+test('get started rows route each role, lawyers via chamber signup', () => {
+    const rows = landing.getStarted.rows;
+    assert.deepEqual(
+        rows.map((r) => r.label),
+        ['I run a chamber', "I'm a lawyer", 'I need a lawyer'],
+    );
+    assert.equal(rows[0].href, '/auth/signup?role=chamber_admin');
+    assert.equal(rows[1].href, '/auth/signup?role=chamber_admin');
+    assert.equal(rows[1].note?.href, '/auth/login');
+    assert.equal(rows[2].href, '/auth/signup?role=client');
+});
+
+test('footer links only point at real targets or placeholders', () => {
+    for (const column of landing.footer.columns) {
+        for (const link of column.links) assert.match(link.href, /^(#|\/auth\/|\[)/, link.href);
+    }
+    assert.match(landing.footer.credit, /Techfini Solutions/);
+});
