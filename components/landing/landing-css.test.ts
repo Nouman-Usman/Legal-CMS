@@ -34,11 +34,28 @@ function rules(source: string): Array<[string, string]> {
 
 const all = rules(css);
 
+// Split a selector list on top-level commas only (not inside :is()/:not()).
+function selectors(list: string): string[] {
+    const out: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < list.length; i++) {
+        if (list[i] === '(') depth++;
+        else if (list[i] === ')') depth--;
+        else if (list[i] === ',' && depth === 0) {
+            out.push(list.slice(start, i));
+            start = i + 1;
+        }
+    }
+    out.push(list.slice(start));
+    return out.map((s) => s.trim());
+}
+
 test('every rule is scoped to the landing root', () => {
     assert.ok(all.length > 0);
     for (const [selector] of all) {
-        for (const part of selector.split(',')) {
-            assert.match(part.trim(), /^(\.has-motion )?\.landing\b/, `unscoped selector: ${part.trim()}`);
+        for (const part of selectors(selector)) {
+            assert.match(part, /^(\.has-motion )?\.landing\b/, `unscoped selector: ${part}`);
         }
     }
 });
