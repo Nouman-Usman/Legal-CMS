@@ -498,6 +498,7 @@
 .landing.l-auth .l-auth__list {
     margin: 0;
     padding-left: 18px;
+    list-style: disc;
     color: var(--l-muted);
     line-height: 1.7;
 }

@@ -3,6 +3,7 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CaseDetail } from '@/components/shared/case-detail';
+import { DashEmbed } from '@/components/dashboard/dash-embed';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
@@ -25,7 +26,9 @@ export default function LawyerCaseDetailPage() {
                         Back to Cases
                     </Button>
 
-                    <CaseDetail caseId={caseId} />
+                    <DashEmbed>
+                        <CaseDetail caseId={caseId} />
+                    </DashEmbed>
                 </div>
             </div>
         </ProtectedRoute>

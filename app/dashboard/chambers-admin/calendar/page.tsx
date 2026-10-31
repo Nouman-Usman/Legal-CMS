@@ -5,9 +5,6 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { getCalendarEvents } from '@/lib/supabase/calendar';
 import { createClient } from '@/lib/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { EventModal } from '@/components/shared/event-modal';
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import {
@@ -33,7 +30,7 @@ import {
     Trash2,
     Download
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { DashPage, EmptyState, PageHeader, Panel, SearchInput, StatTile } from '@/components/dashboard/ui';
 import Link from 'next/link';
 
 export default function CalendarPage() {
@@ -251,421 +248,221 @@ export default function CalendarPage() {
         }
     };
 
+    const shiftMonth = (delta: number) => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1));
+
     return (
         <ProtectedRoute requiredRole="chamber_admin">
-            <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-                {/* Advanced Header Bar */}
-                <header className="flex items-center justify-between px-8 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10">
-                    <div className="flex items-center gap-6">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                                <CalendarIcon className="w-6 h-6 text-indigo-600" />
-                                Legal Calendar
-                            </h1>
-                            <p className="text-xs font-medium text-slate-400 mt-0.5 uppercase tracking-widest">Chambers Management System</p>
-                        </div>
+            <DashPage>
+                <PageHeader
+                    eyebrow="Chambers Management System"
+                    title="Legal Calendar"
+                    actions={
+                        <>
+                            <SearchInput label="Search events" placeholder="Search events..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <button type="button" onClick={handleOpenCreateModal} className="l-btn l-btn--primary l-btn--compact">
+                                <Plus aria-hidden="true" className="w-4 h-4" /> Schedule Event
+                            </button>
+                        </>
+                    }
+                />
 
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
-
-                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                            <Button
-                                variant={view === 'grid' ? 'secondary' : 'ghost'}
-                                size="sm"
-                                onClick={() => setView('grid')}
-                                className="rounded-lg h-8 gap-2"
-                            >
-                                <Grid3X3 className="w-4 h-4" />
-                                Grid
-                            </Button>
-                            <Button
-                                variant={view === 'list' ? 'secondary' : 'ghost'}
-                                size="sm"
-                                onClick={() => setView('list')}
-                                className="rounded-lg h-8 gap-2"
-                            >
-                                <List className="w-4 h-4" />
-                                Timeline
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                    <div className="relative group hidden md:block">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search events..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
-                            />
-                        </div>
-                        <Button onClick={handleOpenCreateModal} className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 rounded-xl gap-2 h-10 px-5 transition-all active:scale-95">
-                            <Plus className="w-4 h-4" />
-                            <span className="font-bold">Schedule Event</span>
-                        </Button>
-                    </div>
-                </header>
-
-                {/* Dynamic Stats Strip */}
-                <div className="flex items-center gap-8 px-8 py-3 bg-indigo-50/30 dark:bg-indigo-900/10 border-b border-indigo-100/50 dark:border-indigo-900/30 shrink-0">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                        <Filter className="w-3 h-3" />
-                        Quick Stats:
-                    </div>
-                    {[
-                        { label: 'Month Overiew', value: stats.total, color: 'text-indigo-600', icon: CalendarIcon },
-                        { label: 'Court Hearings', value: stats.hearings, color: 'text-amber-600', icon: Scale },
-                        { label: 'Case Tasks', value: stats.tasks, color: 'text-emerald-600', icon: CheckCircle2 },
-                        { label: 'Priority Alerts', value: stats.urgent, color: 'text-rose-600', icon: Bell },
-                    ].map((stat, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                            <div className={cn("p-1.5 rounded-lg bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800", stat.color)}>
-                                <stat.icon className="w-3 h-3" />
-                            </div>
-                            <span className="text-sm font-bold">{stat.value}</span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{stat.label}</span>
-                        </div>
-                    ))}
-
-                    <div className="ml-auto flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Filters:</span>
-                        <div className="flex gap-1">
-                            {['all', 'hearing', 'task'].map((type) => (
-                                <button
-                                    key={type}
-                                    onClick={() => setFilterType(type as any)}
-                                    className={cn(
-                                        "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border",
-                                        filterType === type
-                                            ? "bg-white dark:bg-slate-800 border-indigo-200 text-indigo-600 shadow-sm"
-                                            : "border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                                    )}
-                                >
-                                    {type}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                <div className="l-stats">
+                    <StatTile label="Month Overview" value={stats.total} icon={CalendarIcon} />
+                    <StatTile label="Court Hearings" value={stats.hearings} icon={Scale} />
+                    <StatTile label="Case Tasks" value={stats.tasks} icon={CheckCircle2} />
+                    <StatTile label="Priority Alerts" value={stats.urgent} icon={Bell} />
                 </div>
 
-                {/* Main Content Area */}
-                <main className="flex-1 flex overflow-hidden">
-                    {/* Calendar Grid Container */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        {/* Calendar Controls */}
-                        <div className="flex items-center justify-between px-8 py-5 bg-white dark:bg-slate-900/50 shrink-0">
-                            <div className="flex items-center gap-4">
-                                <h2 className="text-3xl font-black text-slate-900 dark:text-white">
-                                    {currentDate.toLocaleString('default', { month: 'long' })}
-                                    <span className="ml-2 font-normal text-slate-300 dark:text-slate-700">{currentDate.getFullYear()}</span>
-                                </h2>
-                                <div className="flex items-center gap-1.5 ml-4">
-                                    <Button variant="outline" size="icon" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="h-8 w-8 rounded-lg">
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="outline" onClick={() => {
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Event type">
+                    <span className="l-label mr-1">Filters:</span>
+                    {['all', 'hearing', 'task'].map((type) => (
+                        <button key={type} type="button" onClick={() => setFilterType(type as any)} aria-pressed={filterType === type} className="l-filter">
+                            {type}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="l-grid l-grid--main">
+                    <section className="l-panel" aria-labelledby="cal-month">
+                        <div className="l-panel__head flex-wrap">
+                            <h2 id="cal-month" className="l-panel__title">
+                                {currentDate.toLocaleString('default', { month: 'long' })} <span className="l-muted">{currentDate.getFullYear()}</span>
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button type="button" className="l-icon-btn" aria-label="Previous month" onClick={() => shiftMonth(-1)}>
+                                    <ChevronLeft aria-hidden="true" className="w-4 h-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="l-btn l-btn--outline l-btn--compact"
+                                    onClick={() => {
                                         const now = new Date();
                                         setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1));
                                         setSelectedDate(now);
-                                    }} className="h-8 px-4 text-xs font-bold rounded-lg uppercase tracking-widest">
-                                        Today
-                                    </Button>
-                                    <Button variant="outline" size="icon" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="h-8 w-8 rounded-lg">
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                                    <div className="w-2 h-2 rounded-full bg-amber-400" /> Hearings
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500" /> Active Tasks
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                                    <div className="w-2 h-2 rounded-full bg-indigo-600" /> Firm Events
-                                </div>
-                                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200 dark:border-slate-700">
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => handleExportCalendar('ics')}
-                                        className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
-                                    >
-                                        <Download className="h-3 w-3" />
-                                        iCal
-                                    </Button>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => handleExportCalendar('csv')}
-                                        className="h-8 rounded-lg gap-1.5 text-xs font-bold uppercase tracking-widest"
-                                    >
-                                        <Download className="h-3 w-3" />
-                                        CSV
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Scrolling Grid */}
-                        <div className="flex-1 overflow-y-auto px-8 pb-8">
-                            <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden">
-                                <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800">
-                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                                        <div key={d} className="py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[2px]">
-                                            {d}
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="grid grid-cols-7 auto-rows-fr">
-                                    {calendarDays.map((dayObj, i) => {
-                                        const dayEvents = getDayEvents(dayObj.date);
-                                        const isSelected = selectedDate && dayObj.date.toDateString() === selectedDate.toDateString();
-                                        const isToday = dayObj.date.toDateString() === new Date().toDateString();
-
-                                        return (
-                                            <div
-                                                key={i}
-                                                onClick={() => setSelectedDate(dayObj.date)}
-                                                className={cn(
-                                                    "min-h-[140px] p-3 border-r border-b border-slate-50 dark:border-slate-800 transition-all cursor-pointer relative",
-                                                    !dayObj.currentMonth && "bg-slate-50/20 dark:bg-slate-900/10 opacity-30",
-                                                    isSelected && "bg-indigo-50/30 dark:bg-indigo-900/10 z-10",
-                                                    "hover:bg-slate-50/80 dark:hover:bg-slate-800/20"
-                                                )}
-                                            >
-                                                {/* Selection Highlight */}
-                                                {isSelected && <div className="absolute inset-0 border-2 border-indigo-500/50 rounded-lg pointer-events-none" />}
-
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className={cn(
-                                                        "flex items-center justify-center w-8 h-8 text-sm font-black rounded-xl transition-all",
-                                                        isToday
-                                                            ? "bg-indigo-600 text-white shadow-xl shadow-indigo-500/30 ring-4 ring-indigo-500/10"
-                                                            : "text-slate-500 dark:text-slate-500 group-hover:text-indigo-600"
-                                                    )}>
-                                                        {dayObj.day}
-                                                    </span>
-
-                                                    {dayEvents.length > 0 && (
-                                                        <div className="flex -space-x-1.5 overflow-hidden">
-                                                            {dayEvents.slice(0, 3).map((_, idx) => (
-                                                                <div key={idx} className="w-1.5 h-1.5 rounded-full bg-indigo-400 ring-2 ring-white dark:ring-slate-900" />
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5 overflow-hidden">
-                                                    {dayEvents.slice(0, 3).map((event: any) => (
-                                                        <div
-                                                            key={event.id}
-                                                            className={cn(
-                                                                "group/event px-2 py-1.5 text-[9px] font-bold rounded-lg truncate transition-all duration-200 uppercase tracking-tight",
-                                                                event.type === 'hearing'
-                                                                    ? "bg-amber-100/40 text-amber-700 border border-amber-200/50 hover:bg-amber-100 hover:scale-[1.02]"
-                                                                    : "bg-indigo-100/40 text-indigo-700 border border-indigo-200/50 hover:bg-indigo-100 hover:scale-[1.02]"
-                                                            )}
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                {event.type === 'hearing' ? <Gavel className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
-                                                                {event.title}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {dayEvents.length > 3 && (
-                                                        <div className="text-[9px] font-black text-indigo-400/60 pl-1 uppercase tracking-tighter">
-                                                            + {dayEvents.length - 3} Schedule
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Premium Agenda Sidebar */}
-                    <aside className="w-96 shrink-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col z-20 overflow-hidden">
-                        <div className="p-8 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                            <div className="flex items-center justify-between mb-2">
-                                <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-none px-3 font-black text-[10px] uppercase tracking-widest">
-                                    Agenda Overview
-                                </Badge>
-                                <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                                    <MoreVertical className="w-4 h-4" />
+                                    }}
+                                >
+                                    Today
+                                </button>
+                                <button type="button" className="l-icon-btn" aria-label="Next month" onClick={() => shiftMonth(1)}>
+                                    <ChevronRight aria-hidden="true" className="w-4 h-4" />
+                                </button>
+                                <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => handleExportCalendar('ics')}>
+                                    <Download aria-hidden="true" className="w-4 h-4" /> iCal
+                                </button>
+                                <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => handleExportCalendar('csv')}>
+                                    <Download aria-hidden="true" className="w-4 h-4" /> CSV
                                 </button>
                             </div>
-                            <h3 className="text-3xl font-black text-slate-900 dark:text-white mt-4">
-                                {selectedDate?.toLocaleDateString('default', { day: 'numeric' })}
-                                <span className="text-indigo-600">.</span>
-                                <span className="text-slate-300 dark:text-slate-700 ml-1 font-medium">{selectedDate?.toLocaleDateString('default', { month: 'long' })}</span>
-                            </h3>
-                            <p className="text-slate-500 text-sm mt-1">{selectedEvents.length} schedules found for this day.</p>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-                            {loading ? (
-                                <div className="flex flex-col items-center justify-center py-24 gap-4">
-                                    <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
-                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Refreshing...</p>
-                                </div>
-                            ) : selectedEvents.length > 0 ? (
-                                selectedEvents.map((event: any) => (
-                                    <div key={event.id} className="group relative p-5 bg-slate-50 dark:bg-slate-800/30 rounded-[24px] border border-transparent hover:border-indigo-500/30 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
-                                        {/* Status bar */}
-                                        <div className={cn(
-                                            "absolute left-0 top-0 bottom-0 w-1.5 transition-all",
-                                            event.type === 'hearing' ? "bg-amber-400" : "bg-indigo-600"
-                                        )} />
+                        <div className="flex flex-wrap gap-4 px-5 pt-4 text-xs l-muted">
+                            <span className="inline-flex items-center gap-1.5"><span className="l-dot l-dot--hearing" aria-hidden="true" /> Hearings</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="l-dot l-dot--task" aria-hidden="true" /> Active Tasks</span>
+                        </div>
 
-                                        <div className="flex flex-col gap-4">
-                                            <div className="flex justify-between items-start">
-                                                <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="flex-1">
-                                                    <div className="flex flex-col cursor-pointer hover:text-indigo-600 transition-colors">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <div className="l-cal" role="grid" aria-labelledby="cal-month">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                                <div key={d} className="l-cal__dow" role="columnheader">
+                                    {d}
+                                </div>
+                            ))}
+                            {calendarDays.map((dayObj, i) => {
+                                const dayEvents = getDayEvents(dayObj.date);
+                                const isSelected = !!selectedDate && dayObj.date.toDateString() === selectedDate.toDateString();
+                                const isToday = dayObj.date.toDateString() === new Date().toDateString();
+                                return (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        role="gridcell"
+                                        onClick={() => setSelectedDate(dayObj.date)}
+                                        aria-selected={isSelected}
+                                        aria-current={isToday ? 'date' : undefined}
+                                        aria-label={`${dayObj.date.toDateString()}, ${dayEvents.length} events`}
+                                        className="l-cal__day"
+                                        data-outside={!dayObj.currentMonth}
+                                    >
+                                        <span className="l-cal__num">{dayObj.day}</span>
+                                        {dayEvents.length > 0 && (
+                                            <span className="l-cal__dots" aria-hidden="true">
+                                                {dayEvents.slice(0, 3).map((e: any) => (
+                                                    <span key={e.id} className={`l-dot ${e.type === 'hearing' ? 'l-dot--hearing' : 'l-dot--task'}`} />
+                                                ))}
+                                            </span>
+                                        )}
+                                        <span className="l-cal__events" aria-hidden="true">
+                                            {dayEvents.slice(0, 3).map((event: any) => (
+                                                <span key={event.id} className="l-cal__event" data-type={event.type}>
+                                                    {event.title}
+                                                </span>
+                                            ))}
+                                            {dayEvents.length > 3 && <span className="text-xs l-muted">+ {dayEvents.length - 3} Schedule</span>}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <div className="l-grid">
+                        <Panel title="Agenda Overview">
+                            <div className="flex flex-col gap-4">
+                                <div>
+                                    <p className="m-0 l-dash-title">
+                                        {selectedDate?.toLocaleDateString('default', { day: 'numeric' })}{' '}
+                                        <span className="l-muted">{selectedDate?.toLocaleDateString('default', { month: 'long' })}</span>
+                                    </p>
+                                    <p className="m-0 mt-1 text-sm l-muted">{selectedEvents.length} schedules found for this day.</p>
+                                </div>
+
+                                {loading ? (
+                                    <div className="l-empty" role="status">
+                                        <Loader2 aria-hidden="true" className="w-6 h-6 animate-spin" />
+                                        <span className="l-label">Refreshing...</span>
+                                    </div>
+                                ) : selectedEvents.length > 0 ? (
+                                    <ul className="flex flex-col gap-3 m-0 p-0 list-none">
+                                        {selectedEvents.map((event: any) => (
+                                            <li key={event.id} className="l-agenda" data-type={event.type}>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="flex flex-col gap-1 min-w-0">
+                                                        <span className="l-label">
                                                             {new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
-                                                        <h4 className="font-bold text-slate-900 dark:text-white mt-1 group-hover:text-indigo-600 transition-colors">{event.title}</h4>
-                                                    </div>
-                                                </Link>
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className={cn(
-                                                        "p-2 rounded-xl transition-all",
-                                                        event.type === 'hearing' ? "bg-amber-500/10 text-amber-600" : "bg-indigo-500/10 text-indigo-600"
-                                                    )}>
-                                                        {event.type === 'hearing' ? <Gavel className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                                                    </div>
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handleOpenEditModal(event)}
-                                                            className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                                            title="Edit event"
-                                                        >
-                                                            <Edit2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+                                                        <span className="font-semibold">{event.title}</span>
+                                                    </Link>
+                                                    <div className="flex gap-1 shrink-0">
+                                                        <button type="button" className="l-icon-btn" onClick={() => handleOpenEditModal(event)} aria-label={`Edit ${event.title}`}>
+                                                            <Edit2 aria-hidden="true" className="w-4 h-4" />
                                                         </button>
                                                         <button
+                                                            type="button"
+                                                            className="l-icon-btn"
                                                             onClick={() => {
                                                                 setSelectedEvent(event);
                                                                 setShowDeleteConfirm(true);
                                                             }}
-                                                            className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                                            title="Delete event"
+                                                            aria-label={`Delete ${event.title}`}
                                                         >
-                                                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                                            <Trash2 aria-hidden="true" className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 w-full" />
-
-                                            <div className="space-y-2.5">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center">
-                                                        <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+                                                <dl className="flex flex-col gap-1 m-0 text-sm">
+                                                    <div className="flex gap-2">
+                                                        <dt className="l-muted inline-flex items-center gap-1.5">
+                                                            <Briefcase aria-hidden="true" className="w-3.5 h-3.5" /> Case Ref.
+                                                        </dt>
+                                                        <dd className="m-0">{event.caseNumber}</dd>
                                                     </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Case Ref.</span>
-                                                        <span className="text-xs font-black text-slate-700 dark:text-slate-300">{event.caseNumber}</span>
-                                                    </div>
-                                                </div>
-
-                                                {event.description && (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center">
-                                                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                                    {event.description && (
+                                                        <div className="flex gap-2">
+                                                            <dt className="l-muted inline-flex items-center gap-1.5">
+                                                                <MapPin aria-hidden="true" className="w-3.5 h-3.5" /> Location / Venue
+                                                            </dt>
+                                                            <dd className="m-0">{event.description}</dd>
                                                         </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Location / Venue</span>
-                                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 truncate w-48">{event.description}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex items-center justify-between mt-2">
-                                                <div className="flex -space-x-2">
-                                                    <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white dark:border-slate-800" />
-                                                    <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-white dark:border-slate-800" />
-                                                </div>
-                                                <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                                    View Case <ChevronRight className="w-3 h-3" />
+                                                    )}
+                                                </dl>
+                                                <Link href={`/dashboard/chambers-admin/cases/${event.caseId}`} className="l-link text-sm self-start">
+                                                    View Case
                                                 </Link>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-20 text-center">
-                                    <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                                        <CheckCircle2 className="w-12 h-12 text-slate-300" />
-                                    </div>
-                                    <h5 className="text-xl font-bold text-slate-900 dark:text-white">Productive Day!</h5>
-                                    <p className="text-sm text-slate-500 mt-2 px-10 leading-relaxed font-medium">There are no hearings or tasks scheduled for this date.</p>
-                                    <Button variant="outline" className="mt-8 rounded-xl font-bold text-xs uppercase tracking-widest border-2">Add First Note</Button>
-                                </div>
-                            )}
-                        </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <EmptyState icon={CheckCircle2} title="Productive Day!" hint="There are no hearings or tasks scheduled for this date." />
+                                )}
+                            </div>
+                        </Panel>
 
-                        <div className="p-8 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                            <Card className="border-none shadow-none bg-slate-900 dark:bg-white rounded-[28px] text-white dark:text-slate-900 relative overflow-hidden group/card transform transition-all hover:scale-[1.02] cursor-pointer" onClick={handleConnectGoogle}>
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full -mr-16 -mt-16 transition-transform group-hover/card:scale-150 duration-700" />
-                                <CardContent className="p-6 relative z-10">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="bg-white p-1 rounded-full">
-                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05" />
-                                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                            </svg>
-                                        </div>
-                                        <h4 className="font-black text-xs uppercase tracking-wider opacity-80">Integration</h4>
-                                    </div>
-                                    <h4 className="font-black text-lg mb-1 leading-none">Google Calendar</h4>
-                                    <p className="text-slate-400 dark:text-slate-600 text-xs font-medium leading-relaxed opacity-80 mb-4 mt-2">Sync your case hearings directly to your personal schedule.</p>
+                        <Panel title="Google Calendar">
+                            <div className="flex flex-col gap-4">
+                                <p className="m-0 text-sm l-muted">Sync your case hearings directly to your personal schedule.</p>
+                                <button type="button" className="l-btn l-btn--outline l-btn--compact self-start" onClick={handleConnectGoogle} disabled={connecting}>
+                                    {connecting ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> : 'Connect Now'}
+                                </button>
+                            </div>
+                        </Panel>
+                    </div>
+                </div>
+            </DashPage>
 
-                                    <Button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleConnectGoogle();
-                                        }}
-                                        disabled={connecting}
-                                        className="w-full bg-indigo-500 hover:bg-indigo-600 dark:bg-slate-900 dark:text-white text-white font-black text-[10px] uppercase tracking-[2px] transition-all shadow-lg"
-                                    >
-                                        {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Connect Now'}
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </aside>
-                </main>
+            <EventModal
+                isOpen={showEventModal}
+                onClose={() => setShowEventModal(false)}
+                onSuccess={handleEventSuccess}
+                event={selectedEvent}
+                mode={selectedEvent ? 'edit' : 'create'}
+            />
 
-                {/* Event Modal */}
-                <EventModal 
-                    isOpen={showEventModal} 
-                    onClose={() => setShowEventModal(false)} 
-                    onSuccess={handleEventSuccess}
-                    event={selectedEvent}
-                    mode={selectedEvent ? 'edit' : 'create'}
-                />
-
-                {/* Delete Confirmation Dialog */}
-                <DeleteConfirmDialog
-                    isOpen={showDeleteConfirm}
-                    onClose={() => setShowDeleteConfirm(false)}
-                    onConfirm={handleDeleteEvent}
-                    title="Delete Event"
-                    description={`Are you sure you want to delete "${selectedEvent?.title}"? This action cannot be undone.`}
-                />
-            </div>
+            <DeleteConfirmDialog
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={handleDeleteEvent}
+                title="Delete Event"
+                description={`Are you sure you want to delete "${selectedEvent?.title}"? This action cannot be undone.`}
+            />
         </ProtectedRoute>
     );
 }

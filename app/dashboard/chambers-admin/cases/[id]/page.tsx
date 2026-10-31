@@ -11,7 +11,7 @@ export default function CaseDetailsPage() {
 
     return (
         <ProtectedRoute requiredRole="chamber_admin">
-            <div className="p-8 bg-gradient-to-b from-slate-50 to-slate-50/50 dark:from-slate-950 dark:to-slate-950/50 min-h-screen">
+            <div className="l-dash-page">
                 <CaseDetail caseId={id} />
             </div>
         </ProtectedRoute>

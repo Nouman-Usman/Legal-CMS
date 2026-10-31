@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { Sidebar } from '@/components/shared/sidebar';
+import { MobileBar } from '@/components/dashboard/mobile-bar';
 
 export default function DashboardLayout({
   children,
@@ -29,8 +30,13 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
-        <Sidebar isCollapsed={sidebarCollapsed} onToggle={handleToggle} />
+      <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-neutral-50">
+        <div className="lg:hidden">
+          <MobileBar />
+        </div>
+        <div className="hidden lg:flex">
+          <Sidebar isCollapsed={sidebarCollapsed} onToggle={handleToggle} />
+        </div>
         <main className="flex-1 overflow-y-auto relative scroll-smooth">
           <div className="min-h-full">
             {children}

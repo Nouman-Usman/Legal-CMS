@@ -104,7 +104,7 @@ export function ClientFormModal({
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <UserPlus className="w-5 h-5 text-blue-600" />
+                        <UserPlus className="w-5 h-5 text-primary" />
                         Add New Client
                     </DialogTitle>
                     <DialogDescription>
@@ -147,14 +147,14 @@ export function ClientFormModal({
                     </div>
 
                     {error && (
-                        <div className="flex gap-2 items-center p-3 rounded-lg bg-red-50 text-red-600 text-sm">
+                        <div className="flex gap-2 items-center p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-destructive text-sm" role="alert">
                             <AlertCircle className="w-4 h-4" />
                             {error}
                         </div>
                     )}
 
                     {success && (
-                        <div className="flex gap-2 items-center p-3 rounded-lg bg-emerald-50 text-emerald-600 text-sm">
+                        <div className="flex gap-2 items-center p-3 rounded-xl border border-primary/40 bg-primary/10 text-primary text-sm" role="status">
                             <CheckCircle2 className="w-4 h-4" />
                             {success}
                         </div>
@@ -164,7 +164,7 @@ export function ClientFormModal({
                         <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+                        <Button type="submit" disabled={loading} className="min-h-11">
                             {loading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
