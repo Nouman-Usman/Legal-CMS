@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { signUp } from '@/lib/supabase/auth';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { AlertCircle, Loader2, Check, ArrowRight, Building, Gavel, User } from 'lucide-react';
 import { UserRole } from '@/lib/contexts/auth-context';
 import { cn } from '@/lib/utils';
+import { parseSignupRole } from '@/lib/landing/signup-role';
 
 const roleOptions: Array<{ id: UserRole; label: string; description: string; icon: React.ElementType }> = [
   {
@@ -27,11 +28,12 @@ const roleOptions: Array<{ id: UserRole; label: string; description: string; ico
 
 function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('client'); // Default to client
+  const [selectedRole, setSelectedRole] = useState<UserRole>(parseSignupRole(searchParams.get('role')) ?? 'client'); // Default to client
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
