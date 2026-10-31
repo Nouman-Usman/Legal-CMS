@@ -5,6 +5,7 @@ import { Hero } from './hero';
 import { Journey } from './journey';
 import { MotionRoot } from './motion-root';
 import { Problem } from './problem';
+import { ProductPeek } from './product-peek';
 import './landing.css';
 
 const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' });
@@ -23,6 +24,7 @@ export function LandingPage() {
                 <Problem />
                 <Journey />
                 <Audiences />
+                <ProductPeek />
             </main>
         </div>
     );
