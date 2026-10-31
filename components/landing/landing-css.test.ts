@@ -82,3 +82,15 @@ test('a focused deck card turns face-up', () => {
     assert.ok(rule, 'missing .l-deck__card:focus-within rule');
     assert.match(rule[1], /--f:\s*1/);
 });
+
+test('auth styles are scoped to the auth shell inside the landing theme', () => {
+    const auth = readFileSync(new URL('../auth/auth.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const authRules = rules(auth);
+    assert.ok(authRules.length > 0);
+    for (const [selector] of authRules) {
+        for (const part of selectors(selector)) {
+            assert.match(part, /^\.landing\.l-auth\b/, `unscoped auth selector: ${part}`);
+        }
+    }
+    assert.doesNotMatch(auth, /--color-\*/);
+});

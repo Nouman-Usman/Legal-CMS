@@ -3,11 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import { AuthAlert, AuthHeading, Field, SubmitButton } from '@/components/auth/auth-ui';
 
 export default function LawyerOnboardingPage() {
     const router = useRouter();
@@ -258,150 +255,84 @@ export default function LawyerOnboardingPage() {
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 italic">
-            <div className="space-y-2">
-                <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
-                    {step === 'password' ? (<>Initialize <br /> <span className="text-blue-600 italic">Security.</span></>) : (<>Finalize <br /> <span className="text-blue-600 italic">Profile.</span></>)}
-                </h1>
-                <p className="text-slate-500 font-medium text-sm italic">
-                    {step === 'password'
-                        ? 'Set a secure password for your new workspace.'
-                        : 'Welcome to the firm. Tell us about your expertise.'}
-                </p>
-            </div>
+        <>
+            <AuthHeading
+                lines={step === 'password' ? ['Secure', 'your account.'] : ['Finish', 'your profile.']}
+                intro={step === 'password' ? 'Set a secure password for your new workspace.' : 'Welcome to the firm. Tell us about your expertise.'}
+            />
 
-            {error && (
-                <div className="flex gap-3 items-start p-4 rounded-2xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest border border-rose-100 italic">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <p>{error}</p>
-                </div>
-            )}
+            {error && <AuthAlert>{error}</AuthAlert>}
 
             {step === 'password' ? (
-                <form onSubmit={handlePasswordSetup} className="space-y-6">
-                    <div className="space-y-5 italic">
-                        <div className="space-y-2 italic text-left">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
-                                Secure Password
-                            </label>
-                            <div className="relative italic">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <Input
-                                    type="password"
-                                    placeholder="••••••••"
-                                    className="pl-12 h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    disabled={loading}
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2 italic text-left">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
-                                Confirm Password
-                            </label>
-                            <div className="relative italic">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <Input
-                                    type="password"
-                                    placeholder="••••••••"
-                                    className="pl-12 h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    disabled={loading}
-                                    required
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-blue-500/20 italic"
+                <form onSubmit={handlePasswordSetup} className="l-auth__stack">
+                    <Field
+                        label="Password"
+                        icon={Lock}
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         disabled={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                                Securing...
-                            </>
-                        ) : (
-                            <>
-                                Continue Setup
-                                <ArrowRight className="w-5 h-5 ml-3" />
-                            </>
-                        )}
-                    </Button>
+                        required
+                        minLength={6}
+                    />
+                    <Field
+                        label="Confirm password"
+                        icon={Lock}
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={loading}
+                        required
+                    />
+                    <SubmitButton loading={loading} loadingLabel="Saving...">
+                        Continue setup
+                    </SubmitButton>
                 </form>
             ) : (
-                <form onSubmit={handleProfileSetup} className="space-y-6">
-                    <div className="space-y-4 italic text-left">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Full Identity Name</label>
-                            <Input
-                                placeholder="John Doe"
-                                value={formData.full_name}
-                                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                                required
-                                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Contact Number</label>
-                            <Input
-                                type="tel"
-                                placeholder="+92 300 1234567"
-                                value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                required
-                                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Specialization</label>
-                            <Input
-                                placeholder="e.g., Corporate Law, Family Law"
-                                value={formData.specialization}
-                                onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                                required
-                                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Bar Registration (Optional)</label>
-                            <Input
-                                placeholder="Registration Number"
-                                value={formData.bar_number}
-                                onChange={(e) => setFormData({ ...formData, bar_number: e.target.value })}
-                                className="h-12 rounded-xl border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 focus:ring-blue-500 font-medium italic"
-                            />
-                        </div>
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-blue-500/20 italic"
+                <form onSubmit={handleProfileSetup} className="l-auth__stack">
+                    <Field
+                        label="Full name"
+                        autoComplete="name"
+                        placeholder="John Doe"
+                        value={formData.full_name}
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                         disabled={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                                Initializing...
-                            </>
-                        ) : (
-                            <>
-                                Enter Dashboard
-                                <ArrowRight className="w-5 h-5 ml-3" />
-                            </>
-                        )}
-                    </Button>
+                        required
+                    />
+                    <Field
+                        label="Contact number"
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="+92 300 1234567"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        disabled={loading}
+                        required
+                    />
+                    <Field
+                        label="Specialization"
+                        placeholder="e.g., Corporate Law, Family Law"
+                        value={formData.specialization}
+                        onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                        disabled={loading}
+                        required
+                    />
+                    <Field
+                        label="Bar registration (optional)"
+                        placeholder="Registration number"
+                        value={formData.bar_number}
+                        onChange={(e) => setFormData({ ...formData, bar_number: e.target.value })}
+                        disabled={loading}
+                    />
+                    <SubmitButton loading={loading} loadingLabel="Saving...">
+                        Enter dashboard
+                    </SubmitButton>
                 </form>
             )}
-        </div>
+        </>
     );
 }

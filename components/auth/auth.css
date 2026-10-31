@@ -1,0 +1,537 @@
+/*
+ * Auth pages (login, signup, password reset, onboarding) in the landing page's
+ * Techfini theme. The shell root carries both `landing` (tokens, type, buttons
+ * from landing.css) and `l-auth`; every rule here starts at `.landing.l-auth`.
+ * Mobile first: one column with a compact brand bar; from 1024px a purple brand
+ * panel sits beside the form.
+ */
+
+.landing.l-auth {
+    display: flex;
+    min-height: 100svh;
+}
+
+/* ─── brand panel (desktop) ─── */
+.landing.l-auth .l-auth__panel {
+    display: none;
+}
+
+.landing.l-auth .l-auth__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+}
+
+.landing.l-auth .l-auth__brand b {
+    font-weight: 700;
+}
+
+.landing.l-auth .l-auth__pitch {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.landing.l-auth .l-auth__pitch-title {
+    margin: 0;
+    font-size: clamp(2.5rem, 1rem + 3.4vw, 5rem);
+    font-weight: 650;
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+}
+
+.landing.l-auth .l-auth__pitch-title span {
+    color: var(--l-lime);
+}
+
+.landing.l-auth .l-auth__urdu {
+    margin: 0;
+    font-size: 24px;
+    color: #c9c2da;
+}
+
+.landing.l-auth .l-auth__case {
+    width: min(340px, 100%);
+    margin-top: 24px;
+    padding: 22px;
+    box-sizing: border-box;
+    border-color: var(--l-hairline-aurora);
+    box-shadow: 0 40px 80px -24px rgb(8 8 8 / 0.6);
+}
+
+.landing.l-auth .l-auth__case-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.landing.l-auth .l-auth__case-title {
+    margin: 12px 0 8px;
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+}
+
+.landing.l-auth .l-auth__case dl {
+    margin: 0;
+    font-size: 13px;
+}
+
+.landing.l-auth .l-auth__case dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--l-surface-3);
+}
+
+.landing.l-auth .l-auth__case dt {
+    color: #929292;
+}
+
+.landing.l-auth .l-auth__case dd {
+    margin: 0;
+    text-align: right;
+}
+
+.landing.l-auth .l-auth__case dd[data-accent='true'] {
+    color: var(--l-lime);
+    font-weight: 600;
+}
+
+.landing.l-auth .l-auth__credit {
+    color: #c9c2da;
+}
+
+/* ─── form column ─── */
+.landing.l-auth .l-auth__main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px var(--l-gutter) 40px;
+    background: radial-gradient(70% 50% at 100% 0%, rgb(60 28 126 / 0.45), transparent 70%), var(--l-canvas);
+}
+
+.landing.l-auth .l-auth__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 64px;
+}
+
+.landing.l-auth .l-auth__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--l-muted);
+}
+
+.landing.l-auth .l-auth__back:is(:hover, :focus-visible) {
+    color: var(--l-ink);
+}
+
+.landing.l-auth .l-auth__body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-block: 32px;
+}
+
+.landing.l-auth .l-auth__form {
+    width: 100%;
+    max-width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    animation: l-auth-rise 600ms var(--l-ease) both;
+}
+
+@keyframes l-auth-rise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+}
+
+/* ─── form primitives ─── */
+.landing.l-auth .l-auth__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.landing.l-auth .l-auth__title {
+    margin: 0;
+    font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.5rem);
+    font-weight: 650;
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+}
+
+.landing.l-auth .l-auth__title span {
+    color: var(--l-lime);
+}
+
+.landing.l-auth .l-auth__stack {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.landing.l-auth .l-auth__pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+}
+
+.landing.l-auth .l-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.landing.l-auth .l-field__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.landing.l-auth .l-field__top a {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--l-lime);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.landing.l-auth .l-field__box {
+    position: relative;
+}
+
+.landing.l-auth .l-field__icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    color: var(--l-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.landing.l-auth .l-input {
+    width: 100%;
+    height: 52px;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--l-surface-3);
+    border-radius: 14px;
+    background: var(--l-surface-1);
+    color: var(--l-ink);
+    font: inherit;
+    font-size: 16px;
+    transition: border-color 200ms var(--l-ease), box-shadow 200ms var(--l-ease);
+}
+
+.landing.l-auth .l-field__icon + .l-input {
+    padding-left: 44px;
+}
+
+/* Password fields: room for the show/hide toggle. */
+.landing.l-auth .l-field__box:has(.l-field__toggle) .l-input {
+    padding-right: 52px;
+}
+
+.landing.l-auth .l-field__toggle {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--l-muted);
+    cursor: pointer;
+    transform: translateY(-50%);
+}
+
+.landing.l-auth .l-field__toggle:is(:hover, :focus-visible) {
+    color: var(--l-ink);
+    background: var(--l-surface-2);
+}
+
+.landing.l-auth .l-field__toggle[aria-pressed='true'] {
+    color: var(--l-lime);
+}
+
+.landing.l-auth .l-input::placeholder {
+    color: #626262;
+}
+
+.landing.l-auth .l-input:hover {
+    border-color: #626262;
+}
+
+.landing.l-auth .l-input:focus {
+    border-color: var(--l-lime);
+    box-shadow: 0 0 0 4px var(--l-lime-soft);
+    outline: none;
+}
+
+.landing.l-auth .l-input:disabled {
+    opacity: 0.6;
+}
+
+/* Keep browser autofill on the dark surface. */
+.landing.l-auth .l-input:-webkit-autofill {
+    -webkit-text-fill-color: var(--l-ink);
+    box-shadow: inset 0 0 0 100px var(--l-surface-1);
+    caret-color: var(--l-ink);
+}
+
+.landing.l-auth .l-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid rgb(255 138 122 / 0.35);
+    border-radius: 14px;
+    background: rgb(255 138 122 / 0.1);
+    color: #ff8a7a;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.landing.l-auth .l-alert svg {
+    flex: none;
+    margin-top: 2px;
+}
+
+.landing.l-auth .l-alert[data-tone='notice'] {
+    border-color: var(--l-hairline-aurora);
+    background: var(--l-lime-soft);
+    color: var(--l-lime);
+}
+
+.landing.l-auth .l-auth__submit {
+    width: 100%;
+    min-height: 52px;
+}
+
+.landing.l-auth .l-auth__submit:disabled {
+    opacity: 0.6;
+    cursor: progress;
+    transform: none;
+}
+
+.landing.l-auth .l-auth__spin {
+    animation: l-auth-spin 900ms linear infinite;
+}
+
+@keyframes l-auth-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.landing.l-auth .l-auth__note {
+    margin: 0;
+    text-align: center;
+    font-size: 14px;
+    color: var(--l-muted);
+}
+
+.landing.l-auth .l-auth__note a,
+.landing.l-auth .l-auth__note button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--l-lime);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+/* Role choice: real radios styled as cards. */
+.landing.l-auth .l-roles {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.landing.l-auth .l-roles legend {
+    margin-bottom: 10px;
+    padding: 0;
+}
+
+.landing.l-auth .l-role {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px;
+    border: 1px solid var(--l-surface-3);
+    border-radius: 22px;
+    background: var(--l-surface-1);
+    cursor: pointer;
+    transition: border-color 200ms var(--l-ease), background-color 200ms var(--l-ease);
+}
+
+.landing.l-auth .l-role input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.landing.l-auth .l-role:hover {
+    border-color: #626262;
+}
+
+.landing.l-auth .l-role:has(input:checked) {
+    border-color: var(--l-lime);
+    background: var(--l-lime-soft);
+}
+
+.landing.l-auth .l-role:has(input:focus-visible) {
+    outline: 3px solid var(--l-lime);
+    outline-offset: 2px;
+}
+
+.landing.l-auth .l-role__icon {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--l-surface-2);
+    color: var(--l-lime);
+}
+
+.landing.l-auth .l-role:has(input:checked) .l-role__icon {
+    background: var(--l-lime);
+    color: var(--l-on-lime);
+}
+
+.landing.l-auth .l-role__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.landing.l-auth .l-role__label {
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+}
+
+.landing.l-auth .l-role__check {
+    margin-left: auto;
+    color: var(--l-lime);
+    opacity: 0;
+}
+
+.landing.l-auth .l-role:has(input:checked) .l-role__check {
+    opacity: 1;
+}
+
+/* Success / waiting states */
+.landing.l-auth .l-auth__state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+}
+
+.landing.l-auth .l-auth__state-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--l-lime-soft);
+    color: var(--l-lime);
+    box-shadow: 0 0 0 10px rgb(205 251 80 / 0.06);
+}
+
+.landing.l-auth .l-auth__state p {
+    margin: 0;
+    max-width: 36ch;
+    color: var(--l-muted);
+    line-height: 1.55;
+}
+
+.landing.l-auth .l-auth__state strong {
+    color: var(--l-ink);
+}
+
+.landing.l-auth .l-auth__list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--l-muted);
+    line-height: 1.7;
+}
+
+.landing.l-auth .l-auth__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+@media (min-width: 560px) {
+    .landing.l-auth .l-auth__pair,
+    .landing.l-auth .l-auth__actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .landing.l-auth .l-auth__panel {
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 40px;
+        flex: 0 0 44%;
+        height: 100svh;
+        padding: 32px clamp(32px, 4vw, 64px);
+        box-sizing: border-box;
+        overflow: hidden;
+        background: var(--l-gradient-space);
+    }
+
+    .landing.l-auth .l-auth__main .l-auth__brand {
+        visibility: hidden;
+    }
+}

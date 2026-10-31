@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { deckCardScrollY, middleCoverage, progressOf, type ProgressMode } from '@/lib/landing/motion';
+import { smoothScrollTo } from '@/lib/landing/scroll';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 // Must match the pinned deck media query in landing.css.
@@ -89,18 +90,30 @@ export function MotionRoot() {
         );
         tracked.forEach((element) => observer.observe(element));
 
-        // In-page links to a deck card (#chambers…) would land on the pin start, where the
-        // cards are still face-down; scroll to the point where that card is face-up instead.
+        // In-page links (#chambers, #how-it-works…) glide to their target instead of jumping.
+        // A deck card inside the pinned deck is reached where it has finished flipping face-up,
+        // not at the pin start where it is still face-down. Focus follows the visitor.
+        let stopScroll = () => {};
         const onClick = (event: MouseEvent) => {
-            const link = (event.target as Element | null)?.closest?.('a[href^="#"]');
-            const card = link && document.getElementById(link.getAttribute('href')!.slice(1));
-            const deck = card?.closest<HTMLElement>('.l-deck');
-            if (!card || !deck || !window.matchMedia(PINNED_DECK_QUERY).matches) return;
+            const link = (event.target as Element | null)?.closest?.('.landing a[href^="#"]');
+            const target = link && document.getElementById(link.getAttribute('href')!.slice(1));
+            if (!target) return;
             event.preventDefault();
-            const rect = deck.getBoundingClientRect();
-            const index = Array.prototype.indexOf.call(card.parentElement!.children, card);
-            window.scrollTo({ top: deckCardScrollY({ top: rect.top + window.scrollY, height: rect.height }, window.innerHeight, index) });
-            history.pushState(null, '', `#${card.id}`);
+
+            let top = target.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(target).scrollMarginTop) || 0);
+            const deck = target.closest<HTMLElement>('.l-deck');
+            if (deck && target !== deck && window.matchMedia(PINNED_DECK_QUERY).matches) {
+                const rect = deck.getBoundingClientRect();
+                const index = Array.prototype.indexOf.call(target.parentElement!.children, target);
+                top = deckCardScrollY({ top: rect.top + window.scrollY, height: rect.height }, window.innerHeight, index);
+            }
+
+            stopScroll();
+            history.pushState(null, '', `#${target.id}`);
+            stopScroll = smoothScrollTo(top, () => {
+                if (!target.matches('a, button, [tabindex]')) target.setAttribute('tabindex', '-1');
+                target.focus({ preventScroll: true });
+            });
         };
         document.addEventListener('click', onClick);
 
@@ -118,6 +131,7 @@ export function MotionRoot() {
             cancelAnimationFrame(raf);
             observer.disconnect();
             document.removeEventListener('click', onClick);
+            stopScroll();
             window.removeEventListener('scroll', request);
             window.removeEventListener('resize', request);
             reducedMotion.removeEventListener('change', onPreference);

@@ -46,7 +46,9 @@ export const landing = {
                 { term: 'Documents', value: '[#] files', accent: false },
                 { term: 'Client', value: 'Notified', accent: false },
             ],
+            notice: '[DRAFT] Hearing reminder sent to client',
         },
+        cue: 'Scroll',
     },
     problem: {
         eyebrow: 'Where cases stall',
