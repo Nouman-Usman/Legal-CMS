@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getCaseById, getCaseDocuments, getTasksByCase, getCaseNotes, createCaseNote, addCaseDocument } from '@/lib/supabase/cases';
+import { getCaseById, getTasksByCase, getCaseNotes, createCaseNote } from '@/lib/supabase/cases';
+import { deleteCaseDocument, getCaseDocuments, getDocumentUrl, uploadCaseDocument, type CaseDocument } from '@/lib/supabase/documents';
+import { DOCUMENT_ACCEPT } from '@/lib/documents/storage-path';
 import { useAuth } from '@/lib/contexts/auth-context';
-import { Loader2, FileText, CheckSquare2, Calendar, Plus, Upload, Send } from 'lucide-react';
+import { Loader2, FileText, CheckSquare2, Calendar, Plus, Upload, Send, Download, Eye, Trash2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TaskModal } from '@/components/shared/task-modal';
-import { DashAlert, EmptyState, Panel, StatusChip } from '@/components/dashboard/ui';
+import { DashAlert, DashDialog, EmptyState, Panel, StatusChip } from '@/components/dashboard/ui';
 import { HearingLog } from '@/components/hearings/hearing-log';
+import { CaseFeesPanel } from '@/components/fees/case-fees-panel';
 
 interface CaseDetailProps {
   caseId: string;
@@ -16,7 +19,7 @@ interface CaseDetailProps {
 export function CaseDetail({ caseId }: CaseDetailProps) {
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,8 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
   const [noteContent, setNoteContent] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [docError, setDocError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<CaseDocument | null>(null);
 
   const loadCaseDetails = async () => {
     try {
@@ -79,35 +84,50 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
     }
   };
 
+  const refreshDocuments = async () => {
+    const { documents: updatedDocs } = await getCaseDocuments(caseId);
+    setDocuments(updatedDocs);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length || !user || !caseData?.chamber_id) return;
 
-    try {
-      setUploading(true);
-
-      // Mocking URL for demonstration as storage is not guaranteed to be setup
-      const fileName = `${caseId}/${Date.now()}-${file.name}`;
-      const publicUrl = `https://placeholder.com/${fileName}`;
-
-      const { document, error } = await addCaseDocument(caseId, {
-        name: file.name,
-        type: file.type,
-        url: publicUrl,
-        uploaded_by: user.id
-      });
-
-      if (error) throw error;
-
-      // Refresh documents
-      const { documents: updatedDocs } = await getCaseDocuments(caseId);
-      setDocuments(updatedDocs || []);
-
-    } catch (err) {
-      console.error('Error uploading document:', err);
-    } finally {
-      setUploading(false);
+    setUploading(true);
+    setDocError('');
+    const failed: string[] = [];
+    for (const file of files) {
+      const { error } = await uploadCaseDocument({ chamberId: caseData.chamber_id, caseId, userId: user.id, file });
+      if (error) failed.push(`${file.name}: ${error.message}`);
     }
+    await refreshDocuments();
+    setUploading(false);
+    if (failed.length) setDocError(failed.join(' · '));
+  };
+
+  const openDocument = async (doc: CaseDocument, download = false) => {
+    // Open the tab during the click so popup blockers allow it, then point it at the signed URL.
+    const win = download ? null : window.open('', '_blank');
+    const { url, error } = await getDocumentUrl(doc, download);
+    if (error || !url) {
+      win?.close();
+      setDocError(error?.message || 'Could not open the document.');
+      return;
+    }
+    if (win) {
+      win.opener = null;
+      win.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  };
+
+  const removeDocument = async (doc: CaseDocument) => {
+    setDocError('');
+    const { error } = await deleteCaseDocument(doc);
+    if (error) setDocError(error.message || 'Could not delete the document. Only the uploader or a chamber admin can delete it.');
+    await refreshDocuments();
   };
 
   if (loading) {
@@ -157,6 +177,7 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
         <TabsList className="l-tabs">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="hearings">Hearings</TabsTrigger>
+          <TabsTrigger value="fees">Fees</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
@@ -191,13 +212,25 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
           <HearingLog caseId={caseId} chamberId={caseData.chamber_id} court={caseData.court} />
         </TabsContent>
 
+        <TabsContent value="fees">
+          <CaseFeesPanel caseInfo={{ ...caseData, chamberName: caseData.chambers?.name }} />
+        </TabsContent>
+
         <TabsContent value="documents">
           <Panel
             title="Case Documents"
             flush
             action={
               <>
-                <input type="file" id="file-upload" className="sr-only" onChange={handleFileUpload} disabled={uploading} />
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="sr-only"
+                  multiple
+                  accept={DOCUMENT_ACCEPT}
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                />
                 <button
                   type="button"
                   className="l-btn l-btn--outline l-btn--compact"
@@ -205,30 +238,75 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
                   onClick={() => document.getElementById('file-upload')?.click()}
                 >
                   {uploading ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> : <Upload aria-hidden="true" className="w-4 h-4" />}
-                  Upload Document
+                  {uploading ? 'Uploading…' : 'Upload Document'}
                 </button>
               </>
             }
           >
+            {docError && (
+              <div className="px-5 pt-4">
+                <DashAlert>{docError}</DashAlert>
+              </div>
+            )}
             {documents.length === 0 ? (
-              <EmptyState icon={FileText} title="No documents uploaded" />
+              <EmptyState icon={FileText} title="No documents uploaded" hint="PDF, photos of orders, Word or Excel. Up to 15 MB each." />
             ) : (
               <ul className="l-rows">
-                {documents.map((doc: any) => (
+                {documents.map((doc) => (
                   <li key={doc.id}>
-                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 min-h-11">
+                    <div className="flex flex-wrap items-center gap-3">
                       <FileText aria-hidden="true" className="w-5 h-5 shrink-0 l-muted" />
                       <span className="flex flex-col min-w-0 flex-1">
                         <span className="font-medium truncate">{doc.name}</span>
-                        <span className="text-sm l-muted">{new Date(doc.created_at || doc.uploaded_at).toLocaleDateString()}</span>
+                        <span className="text-sm l-muted">
+                          {new Date(doc.created_at).toLocaleDateString()}
+                          {doc.size ? ` · ${formatSize(doc.size)}` : ''}
+                          {doc.uploader?.full_name ? ` · ${doc.uploader.full_name}` : ''}
+                          {!doc.storage_path && ' · file missing'}
+                        </span>
                       </span>
-                      <span className="l-link text-sm">Download</span>
-                    </a>
+                      {doc.storage_path && (
+                        <>
+                          <button type="button" className="l-icon-btn" aria-label={`View ${doc.name}`} onClick={() => openDocument(doc)}>
+                            <Eye aria-hidden="true" className="w-4 h-4" />
+                          </button>
+                          <button type="button" className="l-icon-btn" aria-label={`Download ${doc.name}`} onClick={() => openDocument(doc, true)}>
+                            <Download aria-hidden="true" className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      <button type="button" className="l-icon-btn" aria-label={`Delete ${doc.name}`} onClick={() => setConfirmDelete(doc)}>
+                        <Trash2 aria-hidden="true" className="w-4 h-4" />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </Panel>
+          <DashDialog
+            open={!!confirmDelete}
+            onOpenChange={(open) => !open && setConfirmDelete(null)}
+            title="Delete document?"
+            description={confirmDelete ? `"${confirmDelete.name}" will be removed from this case.` : undefined}
+          >
+            <div className="l-dialog-actions">
+              <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="l-btn l-btn--primary l-btn--compact"
+                onClick={async () => {
+                  const doc = confirmDelete;
+                  setConfirmDelete(null);
+                  if (doc) await removeDocument(doc);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </DashDialog>
         </TabsContent>
 
         <TabsContent value="tasks">
@@ -328,4 +406,10 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
       />
     </div>
   );
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

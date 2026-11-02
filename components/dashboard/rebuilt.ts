@@ -28,4 +28,8 @@ export const REBUILT: string[] = [
     'app/dashboard/chambers-admin/docket/page.tsx',
     'app/dashboard/lawyer/docket/page.tsx',
     'components/hearings/notify-client-dialog.tsx',
+    'components/fees/case-fees-panel.tsx',
+    'components/fees/fee-dialogs.tsx',
+    'components/fees/dues-panel.tsx',
+    'app/dashboard/chambers-admin/fees/page.tsx',
 ];

@@ -48,6 +48,7 @@ import {
 } from 'recharts';
 import { CHART } from '@/lib/dashboard/chart';
 import { TodayHearingsPanel } from '@/components/hearings/today-panel';
+import { DuesPanel } from '@/components/fees/dues-panel';
 import { DashAlert, DashPage, EmptyState, PageHeader, Panel, StatTile, StatusChip } from '@/components/dashboard/ui';
 
 export default function ChambersAdminDashboard() {
@@ -326,6 +327,7 @@ export default function ChambersAdminDashboard() {
 
           <div className="l-grid">
           <TodayHearingsPanel docketHref="/dashboard/chambers-admin/docket" casePath={(id) => `/dashboard/chambers-admin/cases/${id}`} />
+          <DuesPanel chamberId={user?.chamber_id} limit={5} />
           <Panel title="Quick Links" flush>
             <ul className="l-rows">
               {quickLinks.map((hub) => (

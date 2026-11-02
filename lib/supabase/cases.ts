@@ -37,7 +37,7 @@ export async function getCaseById(caseId: string) {
   try {
     const { data, error } = await supabase
       .from('cases')
-      .select('*, assigned_lawyer:assigned_to(full_name, email), client:client_id(full_name, email)')
+      .select('*, assigned_lawyer:assigned_to(full_name, email), client:client_id(full_name, email), chambers:chamber_id(name)')
       .eq('id', caseId)
       .single();
 

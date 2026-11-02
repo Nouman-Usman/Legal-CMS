@@ -18,6 +18,7 @@ import {
     FileText,
     Gavel,
     CalendarClock,
+    Wallet,
     Search,
     PenTool,
     MessageSquare,
@@ -75,6 +76,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                         { name: 'All Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
                         { name: 'All Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
                         { name: 'Our Clients', href: '/dashboard/chambers-admin/clients', icon: Users },
+                        { name: 'Fees & Dues', href: '/dashboard/chambers-admin/fees', icon: Wallet },
                     ]
                 },
                 {
