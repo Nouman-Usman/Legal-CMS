@@ -47,6 +47,7 @@ interface Lawyer {
   phone?: string;
   specialization?: string;
   bar_number?: string;
+  lhc_lawyer_code?: string;
   status: 'active' | 'inactive' | 'pending';
   created_at: string;
   role: 'lawyer' | 'munshi';
@@ -435,6 +436,12 @@ export default function LawyersPage() {
             <DashField label="Full Name *" value={editingLawyer.full_name} onChange={(e) => setEditingLawyer({ ...editingLawyer, full_name: e.target.value })} required />
             <DashField label="Phone Number" value={editingLawyer.phone || ''} onChange={(e) => setEditingLawyer({ ...editingLawyer, phone: e.target.value })} />
             <DashField label="Bar ID" value={editingLawyer.bar_number || ''} onChange={(e) => setEditingLawyer({ ...editingLawyer, bar_number: e.target.value })} />
+            <DashField
+              label="LHC lawyer code"
+              placeholder="Finds their Lahore High Court cause-list listings"
+              value={editingLawyer.lhc_lawyer_code || ''}
+              onChange={(e) => setEditingLawyer({ ...editingLawyer, lhc_lawyer_code: e.target.value })}
+            />
             <DashField label="Specialization" value={editingLawyer.specialization || ''} onChange={(e) => setEditingLawyer({ ...editingLawyer, specialization: e.target.value })} />
             <div className="l-dialog-actions">
               <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => setShowEditModal(false)}>

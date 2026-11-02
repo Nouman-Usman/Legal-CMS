@@ -13,6 +13,10 @@ export interface DocketRow {
     lawyerId: string | null;
     lawyerName: string | null;
     status: HearingStatus;
+    /** Bench / judge and court room, when known. */
+    judge?: string | null;
+    /** Put on the docket from the court's cause list. */
+    fromCauseList?: boolean;
 }
 
 const NO_COURT = 'Court not set';

@@ -1,27 +1,18 @@
-import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/server/chamber-admin';
 import { sendMail } from '@/lib/server/mailer';
 import { renderDeadlineReminder } from '@/lib/email/deadline-reminder';
 import { addDays, pkToday, reminderSlot } from '@/lib/deadlines/limitation';
+import { isCronRequest } from '@/lib/server/cron';
 
 export const dynamic = 'force-dynamic';
 
-/** Only the scheduler may call this: `Authorization: Bearer $CRON_SECRET` (Vercel Cron sends it). */
-function authorised(request: Request) {
-    const secret = process.env.CRON_SECRET;
-    if (!secret) return false;
-    const got = Buffer.from(request.headers.get('authorization') ?? '');
-    const want = Buffer.from(`Bearer ${secret}`);
-    return got.length === want.length && timingSafeEqual(got, want);
-}
-
 /**
- * Daily: email the responsible lawyer 3 days and 1 day before each open deadline.
+ * Daily (pg_cron job deadline-reminders, 08:00 PKT): email the responsible lawyer 3 days and 1 day before each open deadline.
  * Unassigned deadlines go to the chamber's admins. Each reminder is sent once.
  */
 export async function GET(request: Request) {
-    if (!authorised(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!isCronRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const db = supabaseAdmin();
     const today = pkToday();

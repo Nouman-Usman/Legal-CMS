@@ -18,7 +18,7 @@ export interface Hearing {
 }
 
 const HEARING_FIELDS =
-    'id, case_id, hearing_date, court_name, judge_name, purpose, status, proceedings, cause_list_no, appearing_lawyer_id, client_notified_at, appearing_lawyer:appearing_lawyer_id(full_name)';
+    'id, case_id, hearing_date, court_name, judge_name, purpose, status, proceedings, cause_list_no, appearing_lawyer_id, client_notified_at, source, appearing_lawyer:appearing_lawyer_id(full_name)';
 
 /** Every hearing of a case, newest first. */
 export async function getCaseHearings(caseId: string) {
@@ -57,6 +57,8 @@ export async function getDocket(chamberId: string, day: Date, lawyerId?: string)
         lawyerId: h.appearing_lawyer_id,
         lawyerName: h.appearing_lawyer?.full_name ?? null,
         status: h.status,
+        judge: h.judge_name ?? null,
+        fromCauseList: h.source === 'cause_list',
     }));
     return { rows, error };
 }

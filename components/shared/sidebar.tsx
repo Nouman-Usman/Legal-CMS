@@ -21,6 +21,7 @@ import {
     Wallet,
     AlarmClock,
     SearchCheck,
+    ScrollText,
     Search,
     PenTool,
     MessageSquare,
@@ -75,6 +76,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                     label: 'Management',
                     items: [
                         { name: 'Daily Docket', href: '/dashboard/chambers-admin/docket', icon: CalendarClock },
+                        { name: 'Cause List', href: '/dashboard/chambers-admin/cause-list', icon: ScrollText },
                         { name: 'Deadlines', href: '/dashboard/chambers-admin/deadlines', icon: AlarmClock },
                         { name: 'All Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
                         { name: 'All Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
@@ -105,6 +107,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                     label: 'Daily',
                     items: [
                         { name: 'Today', href: '/dashboard/munshi', icon: CalendarClock },
+                        { name: 'Cause List', href: '/dashboard/munshi/cause-list', icon: ScrollText },
                         { name: 'Cases', href: '/dashboard/munshi/cases', icon: Briefcase },
                         { name: 'Deadlines', href: '/dashboard/munshi/deadlines', icon: AlarmClock },
                         { name: 'To Collect', href: '/dashboard/munshi/collect', icon: Wallet },

@@ -43,4 +43,7 @@ export const REBUILT: string[] = [
     'app/dashboard/munshi/cases/[id]/page.tsx',
     'app/dashboard/munshi/deadlines/page.tsx',
     'app/dashboard/munshi/collect/page.tsx',
+    'components/cause-lists/cause-list-view.tsx',
+    'app/dashboard/chambers-admin/cause-list/page.tsx',
+    'app/dashboard/munshi/cause-list/page.tsx',
 ];

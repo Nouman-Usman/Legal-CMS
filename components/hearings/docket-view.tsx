@@ -172,6 +172,7 @@ export function DocketView({ scope, casePath, children }: { scope: 'chamber' | '
                                                 <Link href={casePath(row.caseId)} className="font-semibold hover:underline underline-offset-4">
                                                     {[row.caseNumber, row.caseTitle].filter(Boolean).join(' · ')}
                                                 </Link>
+                                                {row.judge && <span className="text-sm l-muted">{row.judge}</span>}
                                                 <span className="text-sm l-muted">
                                                     {row.purpose ? `For: ${row.purpose}` : 'Purpose not set'}
                                                     {scope === 'lawyer' || !row.lawyerName ? '' : ` · ${row.lawyerName}`}
@@ -180,6 +181,7 @@ export function DocketView({ scope, casePath, children }: { scope: 'chamber' | '
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
+                                            {row.fromCauseList && <span className="l-chip l-chip--violet">LHC list</span>}
                                             <StatusChip status={row.status} />
                                             {scope === 'chamber' && (
                                                 <label>

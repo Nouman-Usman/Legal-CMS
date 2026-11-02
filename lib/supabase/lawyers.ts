@@ -8,6 +8,8 @@ export interface RosterLawyer {
     phone?: string;
     specialization?: string;
     bar_number?: string;
+    /** Lahore High Court lawyer code, used to find their cause-list listings. */
+    lhc_lawyer_code?: string;
     status: 'active' | 'inactive' | 'pending';
     created_at: string;
     role: 'lawyer' | 'munshi';
@@ -23,7 +25,7 @@ export async function getChamberRoster(chamberId: string) {
 
     const ids = (data ?? []).map((m: any) => m.users.id);
     const { data: profiles } = ids.length
-        ? await supabase.from('lawyers').select('user_id, bar_number, specialization').in('user_id', ids)
+        ? await supabase.from('lawyers').select('user_id, bar_number, specialization, lhc_lawyer_code').in('user_id', ids)
         : { data: [] as any[] };
     const byUser = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
 
@@ -39,6 +41,7 @@ export async function getChamberRoster(chamberId: string) {
                 phone: u.phone ?? undefined,
                 specialization: p?.specialization ?? undefined,
                 bar_number: p?.bar_number ?? undefined,
+                lhc_lawyer_code: p?.lhc_lawyer_code ?? undefined,
                 status: m.is_active === false ? 'inactive' : u.onboarding_completed ? 'active' : 'pending',
                 created_at: m.joined_at ?? u.created_at,
                 role: u.role === 'munshi' ? 'munshi' : 'lawyer',
@@ -49,14 +52,14 @@ export async function getChamberRoster(chamberId: string) {
 }
 
 /** Name and phone live on users; bar number and specialization on the lawyers profile row. */
-export async function updateLawyerProfile(lawyer: Pick<RosterLawyer, 'id' | 'full_name' | 'phone' | 'bar_number' | 'specialization'>) {
+export async function updateLawyerProfile(lawyer: Pick<RosterLawyer, 'id' | 'full_name' | 'phone' | 'bar_number' | 'specialization' | 'lhc_lawyer_code'>) {
     const { error: userError } = await supabase
         .from('users')
         .update({ full_name: lawyer.full_name, phone: lawyer.phone || null })
         .eq('id', lawyer.id);
     if (userError) return { error: userError };
 
-    const profile = { bar_number: lawyer.bar_number || null, specialization: lawyer.specialization || null };
+    const profile = { bar_number: lawyer.bar_number || null, specialization: lawyer.specialization || null, lhc_lawyer_code: lawyer.lhc_lawyer_code?.trim() || null };
     const { data: updated, error: updateError } = await supabase.from('lawyers').update(profile).eq('user_id', lawyer.id).select('id');
     if (updateError) return { error: updateError };
     if (!updated?.length) {
