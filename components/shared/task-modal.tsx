@@ -88,7 +88,7 @@ export function TaskModal({ isOpen, onClose, onSuccess, caseId }: TaskModalProps
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {error && (
-                        <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-md">
+                        <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/40 rounded-xl" role="alert">
                             {error}
                         </div>
                     )}

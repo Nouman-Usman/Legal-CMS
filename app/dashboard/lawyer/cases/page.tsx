@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { getCasesByFilter } from '@/lib/supabase/cases';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { CaseDetail } from '@/components/shared/case-detail';
+import { DashEmbed } from '@/components/dashboard/dash-embed';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,7 +213,9 @@ export default function LawyerCasesPage() {
           <main className="flex-1 overflow-y-auto bg-white dark:bg-slate-950 p-10 relative">
             {selectedCaseId ? (
               <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-right-4 duration-500">
-                <CaseDetail caseId={selectedCaseId} />
+                <DashEmbed>
+                    <CaseDetail caseId={selectedCaseId} />
+                </DashEmbed>
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-6">

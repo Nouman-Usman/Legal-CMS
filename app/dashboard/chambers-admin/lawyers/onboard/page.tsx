@@ -1,18 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { saveOwnLawyerProfile } from '@/lib/supabase/lawyers';
 import { ProtectedRoute } from '@/lib/components/protected-route';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Save, AlertCircle, CheckCircle2, Briefcase } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, Loader2 } from 'lucide-react';
+import { DashAlert, DashPage, PageHeader, Panel } from '@/components/dashboard/ui';
 import Link from 'next/link';
 
 // Practice areas extracted from Find Lawyers page
@@ -126,18 +121,8 @@ export default function LawyerOnboardPage() {
         setErrors({ submit: 'User not authenticated' });
         return;
       }
-
-      // Update user with lawyer profile data
-      const { error } = await supabase
-        .from('users')
-        .update({
-          lawyer_profile: profile,
-          onboarding_completed: true,
-          specialization: profile.practiceAreas.join(', '),
-          bar_number: profile.licenseNumber,
-          phone: profile.phone,
-        })
-        .eq('id', user.id);
+      // Contact on users, credentials on the lawyers profile row
+      const { error } = await saveOwnLawyerProfile(user.id, profile);
 
       if (error) {
         throw error;
@@ -158,249 +143,197 @@ export default function LawyerOnboardPage() {
 
   return (
     <ProtectedRoute requiredRole="chamber_admin">
-      <div className="p-8 bg-gradient-to-b from-slate-50 to-slate-50/50 dark:from-slate-950 dark:to-slate-950/50 min-h-screen">
-        <div className="max-w-2xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/chambers-admin/lawyers">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
+      <DashPage>
+        <PageHeader
+          title="Lawyer Onboarding"
+          description="Complete your professional profile"
+          actions={
+            <Link href="/dashboard/chambers-admin/lawyers" className="l-btn l-btn--outline l-btn--compact">
+              <ArrowLeft aria-hidden="true" className="w-4 h-4" /> Back
             </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Lawyer Onboarding</h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">Complete your professional profile</p>
-            </div>
-          </div>
+          }
+        />
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Success Alert */}
-            {success && (
-              <Alert className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <AlertDescription className="text-green-800 dark:text-green-400">
-                  Profile saved successfully!
-                </AlertDescription>
-              </Alert>
-            )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5 max-w-3xl w-full">
+          {success && (
+            <p className="l-dash-alert l-dash-alert--ok" role="status">
+              <CheckCircle2 aria-hidden="true" className="w-4 h-4 shrink-0" /> Profile saved successfully!
+            </p>
+          )}
+          {errors.submit && <DashAlert>{errors.submit}</DashAlert>}
 
-            {/* Error Alert */}
-            {errors.submit && (
-              <Alert className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                <AlertDescription className="text-red-800 dark:text-red-400">
-                  {errors.submit}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* License Information Card */}
-            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-white">
-                  <Briefcase className="w-5 h-5" />
-                  License Information
-                </CardTitle>
-                <CardDescription>Your professional credentials</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="licenseNumber" className="text-slate-700 dark:text-slate-300 font-medium">
-                    License Number *
-                  </Label>
-                  <Input
-                    id="licenseNumber"
+          <Panel title="License Information">
+            <div className="l-form">
+              <p className="m-0 text-sm l-muted">Your professional credentials</p>
+              <FieldWithError label="License Number *" error={errors.licenseNumber}>
+                {(id, describedBy) => (
+                  <input
+                    id={id}
+                    className="l-dash-input"
                     placeholder="e.g., BAR-001234"
                     value={profile.licenseNumber}
                     onChange={(e) => handleInputChange('licenseNumber', e.target.value)}
-                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${
-                      errors.licenseNumber ? 'border-red-500' : ''
-                    }`}
+                    aria-invalid={!!errors.licenseNumber}
+                    aria-describedby={describedBy}
                   />
-                  {errors.licenseNumber && (
-                    <p className="text-sm text-red-600 dark:text-red-400">{errors.licenseNumber}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="yearsOfExperience" className="text-slate-700 dark:text-slate-300 font-medium">
-                      Years of Experience
-                    </Label>
-                    <Input
-                      id="yearsOfExperience"
+                )}
+              </FieldWithError>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FieldWithError label="Years of Experience" error={errors.yearsOfExperience}>
+                  {(id, describedBy) => (
+                    <input
+                      id={id}
                       type="number"
+                      className="l-dash-input"
                       placeholder="e.g., 10"
                       value={profile.yearsOfExperience || ''}
                       onChange={(e) => handleInputChange('yearsOfExperience', e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                      aria-invalid={!!errors.yearsOfExperience}
+                      aria-describedby={describedBy}
                     />
-                    {errors.yearsOfExperience && (
-                      <p className="text-sm text-red-600 dark:text-red-400">{errors.yearsOfExperience}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-slate-700 dark:text-slate-300 font-medium">
-                      Phone Number
-                    </Label>
-                    <Input
-                      id="phone"
+                  )}
+                </FieldWithError>
+                <FieldWithError label="Phone Number">
+                  {(id) => (
+                    <input
+                      id={id}
                       type="tel"
+                      className="l-dash-input"
                       placeholder="e.g., +1-555-0123"
                       value={profile.phone || ''}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                     />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  )}
+                </FieldWithError>
+              </div>
+            </div>
+          </Panel>
 
-            {/* Practice Areas Card */}
-            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <CardHeader>
-                <CardTitle className="text-lg text-slate-900 dark:text-white">Practice Areas *</CardTitle>
-                <CardDescription>Select all areas you specialize in</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {practiceAreas.map((area) => (
-                    <button
-                      key={area}
-                      type="button"
-                      onClick={() => togglePracticeArea(area)}
-                      className={`px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${
-                        profile.practiceAreas.includes(area)
-                          ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400'
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                          profile.practiceAreas.includes(area)
-                            ? 'border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500'
-                            : 'border-slate-300 dark:border-slate-600'
-                        }`}>
-                          {profile.practiceAreas.includes(area) && (
-                            <CheckCircle2 className="w-3 h-3 text-white" />
-                          )}
-                        </div>
-                        {area}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                {errors.practiceAreas && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{errors.practiceAreas}</p>
-                )}
-                <div className="pt-2">
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Selected: {profile.practiceAreas.length > 0 ? profile.practiceAreas.join(', ') : 'None'}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+          <Panel title="Practice Areas *">
+            <fieldset className="flex flex-col gap-4 m-0 p-0 border-0">
+              <legend className="text-sm l-muted mb-3">Select all areas you specialize in</legend>
+              <div className="flex flex-wrap gap-2">
+                {practiceAreas.map((area) => (
+                  <button
+                    key={area}
+                    type="button"
+                    onClick={() => togglePracticeArea(area)}
+                    aria-pressed={profile.practiceAreas.includes(area)}
+                    className="l-filter"
+                  >
+                    {profile.practiceAreas.includes(area) && <CheckCircle2 aria-hidden="true" className="w-4 h-4 inline -mt-0.5 mr-1" />}
+                    {area}
+                  </button>
+                ))}
+              </div>
+              {errors.practiceAreas && <p className="m-0 text-sm text-destructive">{errors.practiceAreas}</p>}
+              <p className="m-0 text-sm l-muted">
+                Selected: {profile.practiceAreas.length > 0 ? profile.practiceAreas.join(', ') : 'None'}
+              </p>
+            </fieldset>
+          </Panel>
 
-            {/* Professional Details Card */}
-            <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <CardHeader>
-                <CardTitle className="text-lg text-slate-900 dark:text-white">Professional Details *</CardTitle>
-                <CardDescription>How clients will find and connect with you</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <Label htmlFor="tagline" className="text-slate-700 dark:text-slate-300 font-medium">
-                      Tagline / Headline
-                    </Label>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {profile.tagline.length}/100
-                    </span>
-                  </div>
-                  <Input
-                    id="tagline"
+          <Panel title="Professional Details *">
+            <div className="l-form">
+              <p className="m-0 text-sm l-muted">How clients will find and connect with you</p>
+              <FieldWithError
+                label="Tagline / Headline"
+                error={errors.tagline}
+                hint="This appears on your profile and helps clients understand your expertise"
+                counter={`${profile.tagline.length}/100`}
+              >
+                {(id, describedBy) => (
+                  <input
+                    id={id}
+                    className="l-dash-input"
                     placeholder="e.g., Expert in criminal defense with 15 years of experience"
                     value={profile.tagline}
                     onChange={(e) => handleInputChange('tagline', e.target.value)}
                     maxLength={100}
-                    className={`bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${
-                      errors.tagline ? 'border-red-500' : ''
-                    }`}
+                    aria-invalid={!!errors.tagline}
+                    aria-describedby={describedBy}
                   />
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    This appears on your profile and helps clients understand your expertise
-                  </p>
-                  {errors.tagline && (
-                    <p className="text-sm text-red-600 dark:text-red-400">{errors.tagline}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="bio" className="text-slate-700 dark:text-slate-300 font-medium">
-                    Bio / About You
-                  </Label>
-                  <Textarea
-                    id="bio"
+                )}
+              </FieldWithError>
+              <FieldWithError label="Bio / About You" hint="Optional but recommended for better client matching">
+                {(id, describedBy) => (
+                  <textarea
+                    id={id}
+                    className="l-dash-input"
                     placeholder="Tell clients about your background, achievements, and approach to legal practice..."
                     value={profile.bio || ''}
                     onChange={(e) => handleInputChange('bio', e.target.value)}
                     rows={4}
-                    className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                    aria-describedby={describedBy}
                   />
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Optional but recommended for better client matching
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Form Actions */}
-            <div className="flex gap-3 pt-4">
-              <Link href="/dashboard/chambers-admin/lawyers" className="flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </Button>
-              </Link>
-              <Button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Profile
-                  </>
                 )}
-              </Button>
+              </FieldWithError>
             </div>
-          </form>
+          </Panel>
 
-          {/* Info Box */}
-          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
-            <CardContent className="pt-6">
-              <p className="text-sm text-blue-900 dark:text-blue-400">
-                <span className="font-semibold">💡 Tip:</span> A compelling tagline and bio help clients find the right lawyer. Be specific about your expertise and approach.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          <div className="l-dialog-actions">
+            <Link href="/dashboard/chambers-admin/lawyers" className="l-btn l-btn--outline l-btn--compact">
+              Cancel
+            </Link>
+            <button type="submit" className="l-btn l-btn--primary l-btn--compact" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> Saving...
+                </>
+              ) : (
+                <>
+                  <Save aria-hidden="true" className="w-4 h-4" /> Save Profile
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+
+        <p className="m-0 max-w-3xl text-sm l-muted">
+          <strong className="l-ink">Tip:</strong> A compelling tagline and bio help clients find the right lawyer. Be specific about your expertise and approach.
+        </p>
+      </DashPage>
     </ProtectedRoute>
+  );
+}
+
+/** Label + control + optional hint/error, with ids wired for screen readers. */
+function FieldWithError({
+  label,
+  error,
+  hint,
+  counter,
+  children,
+}: {
+  label: string;
+  error?: string;
+  hint?: string;
+  counter?: string;
+  children: (id: string, describedBy: string | undefined) => React.ReactNode;
+}) {
+  const id = useId();
+  const hintId = hint ? `${id}-hint` : undefined;
+  const errorId = error ? `${id}-error` : undefined;
+  const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+  return (
+    <div className="l-dash-field">
+      <div className="flex justify-between gap-3">
+        <label htmlFor={id} className="l-label">
+          {label}
+        </label>
+        {counter && <span className="text-xs l-muted">{counter}</span>}
+      </div>
+      {children(id, describedBy)}
+      {hint && (
+        <p id={hintId} className="m-0 text-xs l-muted">
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={errorId} className="m-0 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

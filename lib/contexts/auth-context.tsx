@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
-export type UserRole = 'chamber_admin' | 'lawyer' | 'client';
+export type UserRole = 'chamber_admin' | 'lawyer' | 'munshi' | 'client';
 
 export interface UserProfile extends User {
   role: UserRole;
@@ -26,6 +26,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Chamber membership lives in chamber_members (there is no users.chamber_id column).
+  // The first active membership becomes `chamber_id` for the rest of the app.
+  const withChamber = async <T extends { id: string }>(profile: T | null): Promise<(T & { chamber_id?: string }) | null> => {
+    if (!profile) return profile;
+    const { data: membership } = await supabase
+      .from('chamber_members')
+      .select('chamber_id')
+      .eq('user_id', profile.id)
+      .neq('is_active', false)
+      .order('joined_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return { ...profile, chamber_id: membership?.chamber_id ?? undefined };
+  };
+
   // Helper to fetch or create profile
   const getProfileWithRetry = async (currentUser: User) => {
     try {
@@ -46,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 2. If profile exists, return it
       if (profile) {
         console.log('Profile found:', profile.email);
-        return profile;
+        return withChamber(profile);
       }
 
       // 3. Profile doesn't exist - create it
@@ -81,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log('Profile created successfully:', upsertedProfile?.email);
-      return upsertedProfile;
+      return withChamber(upsertedProfile);
     } catch (err) {
       console.error('Unexpected error in getProfileWithRetry:', err);
       return null;
@@ -90,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let inFlight: { userId: string; promise: ReturnType<typeof getProfileWithRetry> } | null = null;
     console.log('AuthProvider mounted');
 
     // Global safety valve: force loading=false after 6s no matter what
@@ -159,16 +175,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleUserSession = async (currentUser: User) => {
       try {
-        // Wrap profile fetch with timeout
-        const profilePromise = getProfileWithRetry(currentUser);
+        // Wrap profile fetch with timeout; concurrent auth events share one fetch
+        if (!inFlight || inFlight.userId !== currentUser.id) {
+          inFlight = { userId: currentUser.id, promise: getProfileWithRetry(currentUser) };
+          inFlight.promise.finally(() => {
+            setTimeout(() => {
+              inFlight = null;
+            }, 1000);
+          });
+        }
+        const profilePromise = inFlight.promise;
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<null>((resolve) => {
-          setTimeout(() => {
+          timer = setTimeout(() => {
             console.warn('Profile fetch timed out after 4s');
             resolve(null);
           }, 4000);
         });
 
         const profile = await Promise.race([profilePromise, timeoutPromise]);
+        clearTimeout(timer);
 
         if (!isMounted) return;
 
@@ -183,11 +209,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const metadataRole = currentUser.user_metadata?.role;
           const role: UserRole = validRoles.includes(metadataRole) ? metadataRole : 'client';
 
-          setUser({
-            ...currentUser,
-            role: role,
-            full_name: currentUser.user_metadata?.full_name || currentUser.email || '',
-          } as UserProfile);
+          // Timed out: don't let this bare fallback overwrite a full profile that another
+          // auth event already loaded for the same user (that dropped chamber_id at random).
+          setUser((prev) =>
+            prev && prev.id === currentUser.id
+              ? prev
+              : ({
+                  ...currentUser,
+                  role: role,
+                  full_name: currentUser.user_metadata?.full_name || currentUser.email || '',
+                } as UserProfile),
+          );
+          // The slow fetch usually still succeeds: apply it when it lands.
+          profilePromise.then((late) => {
+            if (late && isMounted) setUser({ ...currentUser, ...late } as UserProfile);
+          });
         }
         setLoading(false);
       } catch (err) {
@@ -203,9 +239,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isMounted) return;
 
         if (session?.user) {
-          // If we already have the same user loaded, don't re-fetch profile unless it's a specific event
-          // checking user.id against session.user.id would require valid closure or ref
-          await handleUserSession(session.user);
+          // Never await Supabase calls inside this callback: it runs while the auth
+          // client holds its lock, so profile queries waited for the lock until the 4s
+          // timeout fired. Defer the work until the callback has returned.
+          const sessionUser = session.user;
+          setTimeout(() => {
+            if (isMounted) handleUserSession(sessionUser);
+          }, 0);
         } else {
           setUser(null);
           setLoading(false);

@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { getChamberLawyers } from '@/lib/supabase/hearings';
+import { createClient as createChamberClient, getClientOptions } from '@/lib/supabase/clients';
+import { getCaseParties, setOpposingParties } from '@/lib/supabase/intake';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +26,8 @@ interface CaseFormModalProps {
   onSuccess?: () => void;
   caseData?: any;
   isEditing?: boolean;
+  /** A new case opened from a cleared (or waived) conflict check. */
+  prefill?: { client_name: string; client_phone?: string; description?: string; opposing: string[]; conflict_check_id: string };
 }
 
 const CASE_TYPES = [
@@ -43,19 +48,25 @@ export function CaseFormModal({
   onSuccess,
   caseData,
   isEditing = false,
+  prefill,
 }: CaseFormModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<any[]>([]);
   const [lawyers, setLawyers] = useState<any[]>([]);
+  const [clientOptions, setClientOptions] = useState<Array<{ id: string; full_name: string; phone: string | null }>>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  /** Opposing parties, one per line (they feed future conflict checks). */
+  const [opposing, setOpposing] = useState('');
 
   const [formData, setFormData] = useState({
     case_number: '',
     title: '',
     description: '',
     client_id: '',
+    chamber_client_id: '',
+    client_name: '',
+    client_phone: '',
     assigned_to: '',
     case_type: '',
     priority: 'medium',
@@ -70,24 +81,13 @@ export function CaseFormModal({
       if (!user?.chamber_id) return;
 
       try {
-        // Fetch clients
-        const { data: clientsData } = await supabase
-          .from('users')
-          .select('id, full_name')
-          .eq('chamber_id', user.chamber_id)
-          .eq('role', 'client')
-          .order('full_name');
+        // Lawyers come from chamber membership (there is no users.chamber_id column)
+        const { lawyers: chamberLawyers } = await getChamberLawyers(user.chamber_id);
+        const lawyersData = chamberLawyers.map((l) => ({ id: l.id, full_name: l.name }));
 
-        // Fetch lawyers
-        const { data: lawyersData } = await supabase
-          .from('users')
-          .select('id, full_name')
-          .eq('chamber_id', user.chamber_id)
-          .eq('role', 'lawyer')
-          .order('full_name');
-
-        setClients(clientsData || []);
         setLawyers(lawyersData || []);
+        const { options } = await getClientOptions(user.chamber_id);
+        setClientOptions(options);
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -104,6 +104,9 @@ export function CaseFormModal({
         title: caseData.title || '',
         description: caseData.description || '',
         client_id: caseData.client_id || '',
+        chamber_client_id: caseData.chamber_client_id || '',
+        client_name: caseData.client_name || '',
+        client_phone: caseData.client_phone || '',
         assigned_to: caseData.assigned_to || '',
         case_type: caseData.case_type || '',
         priority: caseData.priority || 'medium',
@@ -111,8 +114,21 @@ export function CaseFormModal({
         filing_date: caseData.filing_date || '',
         next_hearing_date: caseData.next_hearing_date || '',
       });
+      getCaseParties(caseData.id).then(({ parties }) => setOpposing(parties.filter((p) => p.role === 'opposing').map((p) => p.name).join('\n')));
     }
   }, [isEditing, caseData]);
+
+  useEffect(() => {
+    if (!isOpen || isEditing || !prefill) return;
+    setFormData((prev) => ({
+      ...prev,
+      chamber_client_id: '',
+      client_name: prefill.client_name,
+      client_phone: prefill.client_phone || '',
+      description: prefill.description || prev.description,
+    }));
+    setOpposing(prefill.opposing.join('\n'));
+  }, [isOpen, isEditing, prefill]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({
@@ -131,8 +147,8 @@ export function CaseFormModal({
       setError('Case title is required');
       return false;
     }
-    if (!formData.client_id) {
-      setError('Please select a client');
+    if (!formData.client_name.trim()) {
+      setError('Client name is required');
       return false;
     }
     return true;
@@ -148,8 +164,28 @@ export function CaseFormModal({
       setLoading(true);
       setError('');
 
+      const blankToNull = (v: string | null | undefined) => (v && String(v).trim() ? v : null);
+
+      // A new client is saved to the chamber's client list first, then linked.
+      let chamberClientId = formData.chamber_client_id;
+      if (!chamberClientId) {
+        const { client, error: clientError } = await createChamberClient({
+          chamber_id: user.chamber_id,
+          full_name: formData.client_name,
+          phone: formData.client_phone,
+        });
+        if (clientError || !client) throw clientError || new Error('Could not save the client');
+        chamberClientId = client.id;
+      }
       const payload = {
         ...formData,
+        client_id: blankToNull(formData.client_id),
+        chamber_client_id: chamberClientId,
+        client_name: formData.client_name.trim(),
+        client_phone: blankToNull(formData.client_phone),
+        assigned_to: blankToNull(formData.assigned_to),
+        filing_date: blankToNull(formData.filing_date),
+        next_hearing_date: blankToNull(formData.next_hearing_date),
         chamber_id: user.chamber_id,
       };
 
@@ -161,13 +197,21 @@ export function CaseFormModal({
           .eq('id', caseData.id);
 
         if (updateError) throw updateError;
+        const { error: partiesError } = await setOpposingParties(caseData.id, opposing.split('\n'));
+        if (partiesError) throw partiesError;
         setSuccess('Case updated successfully!');
       } else {
         // Create new case
-        const { error: insertError } = await supabase.from('cases').insert([payload]);
+        const { data: created, error: insertError } = await supabase
+          .from('cases')
+          .insert([{ ...payload, conflict_check_id: prefill?.conflict_check_id ?? null }])
+          .select('id')
+          .single();
 
-        if (insertError) throw insertError;
-        setSuccess('Case created successfully!');
+        if (insertError || !created) throw insertError || new Error('Could not create the case');
+        const { error: partiesError } = await setOpposingParties(created.id, opposing.split('\n'));
+        // The case exists now; never leave the form open to create it twice.
+        setSuccess(partiesError ? 'Case created, but the opposing parties were not saved. Edit the case to add them.' : 'Case created successfully!');
       }
 
       setTimeout(() => {
@@ -186,9 +230,9 @@ export function CaseFormModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto rounded-[22px]">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 sticky top-0 bg-card border-b border-border z-10">
           <div>
             <CardTitle>{isEditing ? 'Edit Case' : 'Create New Case'}</CardTitle>
             <CardDescription>
@@ -204,22 +248,22 @@ export function CaseFormModal({
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Error Alert */}
             {error && (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/40">
+                <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
 
             {/* Success Alert */}
             {success && (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
-                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                <p className="text-sm text-green-700 dark:text-green-400">{success}</p>
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/40">
+                <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                <p className="text-sm text-primary">{success}</p>
               </div>
             )}
 
             {/* Case Number and Title */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="case_number">Case Number *</Label>
                 <Input
@@ -227,13 +271,13 @@ export function CaseFormModal({
                   placeholder="e.g., CASE-2024-001"
                   value={formData.case_number}
                   onChange={(e) => handleInputChange('case_number', e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                  className="bg-secondary border-input min-h-11"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="case_type">Case Type</Label>
                 <Select value={formData.case_type} onValueChange={(value) => handleInputChange('case_type', value)}>
-                  <SelectTrigger className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger className="bg-secondary border-input min-h-11">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -255,7 +299,7 @@ export function CaseFormModal({
                 placeholder="Enter case title"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                className="bg-secondary border-input min-h-11"
               />
             </div>
 
@@ -268,31 +312,74 @@ export function CaseFormModal({
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
                 rows={4}
-                className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                className="bg-secondary border-input min-h-11"
               />
             </div>
 
             {/* Client and Lawyer */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="client_id">Client *</Label>
-                <Select value={formData.client_id} onValueChange={(value) => handleInputChange('client_id', value)}>
-                  <SelectTrigger className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="Select client" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="chamber_client">Client</Label>
+                <Select
+                  value={formData.chamber_client_id || 'new'}
+                  onValueChange={(value) => {
+                    if (value === 'new') {
+                      setFormData((prev) => ({ ...prev, chamber_client_id: '', client_name: '', client_phone: '' }));
+                    } else {
+                      const picked = clientOptions.find((c) => c.id === value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        chamber_client_id: value,
+                        client_name: picked?.full_name || '',
+                        client_phone: picked?.phone || '',
+                      }));
+                    }
+                    setError('');
+                  }}
+                >
+                  <SelectTrigger id="chamber_client" className="bg-secondary border-input min-h-11">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.full_name}
+                    <SelectItem value="new">+ New client</SelectItem>
+                    {clientOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.full_name}
+                        {c.phone ? ` · ${c.phone}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="client_name">Client name *</Label>
+                <Input
+                  id="client_name"
+                  placeholder="e.g. Muhammad Ali"
+                  value={formData.client_name}
+                  onChange={(e) => handleInputChange('client_name', e.target.value)}
+                  readOnly={!!formData.chamber_client_id}
+                  className="bg-secondary border-input min-h-11"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client_phone">Client phone (WhatsApp)</Label>
+                <Input
+                  id="client_phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+92 300 1234567"
+                  value={formData.client_phone}
+                  onChange={(e) => handleInputChange('client_phone', e.target.value)}
+                  readOnly={!!formData.chamber_client_id}
+                  className="bg-secondary border-input min-h-11"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="assigned_to">Assign Lawyer</Label>
                 <Select value={formData.assigned_to || 'none'} onValueChange={(value) => handleInputChange('assigned_to', value === 'none' ? null : value)}>
-                  <SelectTrigger className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger className="bg-secondary border-input min-h-11">
                     <SelectValue placeholder="Select lawyer" />
                   </SelectTrigger>
                   <SelectContent>
@@ -307,12 +394,30 @@ export function CaseFormModal({
               </div>
             </div>
 
+            {/* Opposing parties */}
+            <div className="space-y-2">
+              <Label htmlFor="opposing">Opposing parties</Label>
+              <Textarea
+                id="opposing"
+                placeholder={'One per line, e.g.\nProvince of Punjab through Chief Secretary'}
+                value={opposing}
+                onChange={(e) => setOpposing(e.target.value)}
+                rows={3}
+                className="bg-secondary border-input min-h-11"
+              />
+              <p className="text-xs text-muted-foreground">
+                {!isEditing && !prefill
+                  ? 'Tip: run a conflict check from Intake before opening a new matter.'
+                  : 'Used by future conflict checks.'}
+              </p>
+            </div>
+
             {/* Priority and Status */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
                 <Select value={formData.priority} onValueChange={(value) => handleInputChange('priority', value)}>
-                  <SelectTrigger className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger className="bg-secondary border-input min-h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -326,7 +431,7 @@ export function CaseFormModal({
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
-                  <SelectTrigger className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger className="bg-secondary border-input min-h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -340,7 +445,7 @@ export function CaseFormModal({
             </div>
 
             {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="filing_date">Filing Date</Label>
                 <Input
@@ -348,7 +453,7 @@ export function CaseFormModal({
                   type="date"
                   value={formData.filing_date}
                   onChange={(e) => handleInputChange('filing_date', e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                  className="bg-secondary border-input min-h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -358,19 +463,19 @@ export function CaseFormModal({
                   type="date"
                   value={formData.next_hearing_date}
                   onChange={(e) => handleInputChange('next_hearing_date', e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                  className="bg-secondary border-input min-h-11"
                 />
               </div>
             </div>
 
             {/* Form Actions */}
-            <div className="flex gap-3 justify-end pt-6 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-wrap gap-3 justify-end pt-6 border-t border-border">
               <Button variant="outline" onClick={onClose} disabled={loading}>
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 min-h-11"
                 disabled={loading}
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}

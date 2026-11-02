@@ -30,27 +30,27 @@ export function DeleteConfirmDialog({ isOpen, onClose, onConfirm, title = 'Delet
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="dark:bg-slate-900 dark:border-slate-800">
+            <DialogContent>
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-black">{title}</DialogTitle>
+                    <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
                 </DialogHeader>
-                <p className="text-sm text-slate-600 dark:text-slate-300 my-4">
+                <p className="text-sm text-muted-foreground my-4">
                     {description}
                 </p>
-                <DialogFooter className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                <DialogFooter className="flex gap-3 pt-4 border-t border-border">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={onClose}
                         disabled={loading}
-                        className="dark:border-slate-700 dark:hover:bg-slate-800"
+                        className="min-h-11"
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleConfirm}
                         disabled={loading}
-                        className="bg-red-600 hover:bg-red-700 text-white"
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90 min-h-11"
                     >
                         {loading ? (
                             <>

@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getCaseById, getCaseDocuments, getTasksByCase, getCaseNotes, createCaseNote, addCaseDocument } from '@/lib/supabase/cases';
+import { getCaseById, getTasksByCase, getCaseNotes, createCaseNote } from '@/lib/supabase/cases';
+import { deleteCaseDocument, getCaseDocuments, getDocumentUrl, uploadCaseDocument, type CaseDocument } from '@/lib/supabase/documents';
+import { DOCUMENT_ACCEPT } from '@/lib/documents/storage-path';
 import { useAuth } from '@/lib/contexts/auth-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, FileText, CheckSquare2, StickyNote, AlertCircle, Calendar, Plus, Upload, Send } from 'lucide-react';
+import { Loader2, FileText, CheckSquare2, Calendar, Plus, Upload, Send, Download, Eye, Trash2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TaskModal } from '@/components/shared/task-modal';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
+import { DashAlert, DashDialog, EmptyState, Panel, StatusChip } from '@/components/dashboard/ui';
+import { HearingLog } from '@/components/hearings/hearing-log';
+import { CaseFeesPanel } from '@/components/fees/case-fees-panel';
+import { CaseDeadlines } from '@/components/deadlines/deadline-list';
+import { getCaseDeadlines, type Deadline } from '@/lib/supabase/deadlines';
+import { getCaseParties } from '@/lib/supabase/intake';
+import { dueBucket, pkToday } from '@/lib/deadlines/limitation';
 
 interface CaseDetailProps {
   caseId: string;
@@ -18,7 +23,7 @@ interface CaseDetailProps {
 export function CaseDetail({ caseId }: CaseDetailProps) {
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,14 +35,20 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
   const [noteContent, setNoteContent] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [docError, setDocError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<CaseDocument | null>(null);
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+  const [opposing, setOpposing] = useState<string[]>([]);
 
   const loadCaseDetails = async () => {
     try {
-      const [caseResult, docsResult, tasksResult, notesResult] = await Promise.all([
+      const [caseResult, docsResult, tasksResult, notesResult, deadlinesResult, partiesResult] = await Promise.all([
         getCaseById(caseId),
         getCaseDocuments(caseId),
         getTasksByCase(caseId),
         getCaseNotes(caseId, user?.id),
+        getCaseDeadlines(caseId),
+        getCaseParties(caseId),
       ]);
 
       if (caseResult.error) throw caseResult.error;
@@ -46,6 +57,8 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
       setDocuments(docsResult.documents || []);
       setTasks(tasksResult.tasks || []);
       setNotes(notesResult.notes || []);
+      setDeadlines(deadlinesResult.deadlines);
+      setOpposing(partiesResult.parties.filter((p) => p.role === 'opposing').map((p) => p.name));
     } catch (err) {
       setError('Failed to load case details');
       console.error(err);
@@ -81,291 +94,342 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
     }
   };
 
+  const refreshDocuments = async () => {
+    const { documents: updatedDocs } = await getCaseDocuments(caseId);
+    setDocuments(updatedDocs);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length || !user || !caseData?.chamber_id) return;
 
-    try {
-      setUploading(true);
-
-      // Mocking URL for demonstration as storage is not guaranteed to be setup
-      const fileName = `${caseId}/${Date.now()}-${file.name}`;
-      const publicUrl = `https://placeholder.com/${fileName}`;
-
-      const { document, error } = await addCaseDocument(caseId, {
-        name: file.name,
-        type: file.type,
-        url: publicUrl,
-        uploaded_by: user.id
-      });
-
-      if (error) throw error;
-
-      // Refresh documents
-      const { documents: updatedDocs } = await getCaseDocuments(caseId);
-      setDocuments(updatedDocs || []);
-
-    } catch (err) {
-      console.error('Error uploading document:', err);
-    } finally {
-      setUploading(false);
+    setUploading(true);
+    setDocError('');
+    const failed: string[] = [];
+    for (const file of files) {
+      const { error } = await uploadCaseDocument({ chamberId: caseData.chamber_id, caseId, userId: user.id, file });
+      if (error) failed.push(`${file.name}: ${error.message}`);
     }
+    await refreshDocuments();
+    setUploading(false);
+    if (failed.length) setDocError(failed.join(' · '));
+  };
+
+  const openDocument = async (doc: CaseDocument, download = false) => {
+    // Open the tab during the click so popup blockers allow it, then point it at the signed URL.
+    const win = download ? null : window.open('', '_blank');
+    const { url, error } = await getDocumentUrl(doc, download);
+    if (error || !url) {
+      win?.close();
+      setDocError(error?.message || 'Could not open the document.');
+      return;
+    }
+    if (win) {
+      win.opener = null;
+      win.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  };
+
+  const removeDocument = async (doc: CaseDocument) => {
+    setDocError('');
+    const { error } = await deleteCaseDocument(doc);
+    if (error) setDocError(error.message || 'Could not delete the document. Only the uploader or a chamber admin can delete it.');
+    await refreshDocuments();
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="l-empty" role="status">
+        <Loader2 aria-hidden="true" className="w-8 h-8 animate-spin" />
+        <span className="sr-only">Loading case</span>
       </div>
     );
   }
 
   if (error || !caseData) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-2 items-center text-destructive">
-            <AlertCircle className="w-5 h-5" />
-            <p>{error || 'Case not found'}</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <DashAlert>{error || 'Case not found'}</DashAlert>;
   }
 
-  const statusColors: any = {
-    active: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800',
-    pending: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
-    on_hold: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
-    closed: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800',
-  };
+  const today = pkToday();
+  const openDeadlines = deadlines.filter((d) => d.status === 'open').length;
+  const overdue = deadlines.filter((d) => d.status === 'open' && dueBucket(d.due_date, today) === 'overdue').length;
+
+  const facts = [
+    { term: 'Type', value: caseData.case_type || 'N/A' },
+    { term: 'Priority', value: caseData.priority },
+    { term: 'Filing Date', value: caseData.filing_date ? new Date(caseData.filing_date).toLocaleDateString() : 'N/A' },
+    { term: 'Assigned Lawyer', value: caseData.assigned_lawyer?.full_name || 'Unassigned' },
+    { term: 'Client', value: [caseData.client_name, caseData.client_phone].filter(Boolean).join(' · ') || 'Not set' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-50/50 dark:from-slate-800 dark:to-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-          <div className="flex justify-between items-start gap-4">
-            <div>
-              <CardTitle className="text-3xl text-slate-900 dark:text-white">{caseData.title}</CardTitle>
-              <CardDescription className="text-slate-600 dark:text-slate-400 mt-2">Case #{caseData.case_number}</CardDescription>
+    <div className="flex flex-col gap-6">
+      <header className="l-panel">
+        <div className="l-panel__body flex flex-col gap-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col gap-2 min-w-0">
+              <span className="l-label">Case #{caseData.case_number}</span>
+              <h1 className="l-dash-title">{caseData.title}</h1>
             </div>
-            <span className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${statusColors[caseData.status] || 'bg-slate-100 dark:bg-slate-800'}`}>
-              {caseData.status?.toUpperCase()}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Type</p>
-              <p className="text-base font-semibold text-slate-900 dark:text-white">{caseData.case_type || 'N/A'}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Priority</p>
-              <p className="text-base font-semibold text-slate-900 dark:text-white capitalize">{caseData.priority}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Filing Date</p>
-              <p className="text-base font-semibold text-slate-900 dark:text-white">{caseData.filing_date ? new Date(caseData.filing_date).toLocaleDateString() : 'N/A'}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Assigned Lawyer</p>
-              <p className="text-base font-semibold text-slate-900 dark:text-white">{caseData.assigned_lawyer?.full_name || 'Unassigned'}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {overdue > 0 && (
+                <button type="button" className="l-chip l-chip--danger" onClick={() => setActiveTab('deadlines')}>
+                  {overdue} deadline{overdue === 1 ? '' : 's'} overdue
+                </button>
+              )}
+              <StatusChip status={caseData.status}>{caseData.status?.toUpperCase()}</StatusChip>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <dl className="grid grid-cols-2 lg:grid-cols-5 gap-4 m-0">
+            {facts.map((fact) => (
+              <div key={fact.term} className="flex flex-col gap-1">
+                <dt className="l-label">{fact.term}</dt>
+                <dd className="m-0 font-semibold capitalize">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-          <TabsTrigger value="overview" className="text-xs font-semibold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm">Overview</TabsTrigger>
-          <TabsTrigger value="documents" className="text-xs font-semibold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm">Documents ({documents.length})</TabsTrigger>
-          <TabsTrigger value="tasks" className="text-xs font-semibold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm">Tasks ({tasks.length})</TabsTrigger>
-          <TabsTrigger value="notes" className="text-xs font-semibold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm">Notes ({notes.length})</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
+        <TabsList className="l-tabs">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="hearings">Hearings</TabsTrigger>
+          <TabsTrigger value="deadlines">Deadlines ({openDeadlines})</TabsTrigger>
+          <TabsTrigger value="fees">Fees</TabsTrigger>
+          <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
+          <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
-          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-slate-900 dark:text-white">Case Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div>
-                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">Description</p>
-                <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{caseData.description}</p>
+          <Panel title="Case Details">
+            <dl className="flex flex-col gap-5 m-0">
+              <div className="flex flex-col gap-1">
+                <dt className="l-label">Description</dt>
+                <dd className="m-0 leading-relaxed">{caseData.description}</dd>
               </div>
+              {opposing.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <dt className="l-label">Opposing parties</dt>
+                  <dd className="m-0 leading-relaxed">{opposing.join(' · ')}</dd>
+                </div>
+              )}
               {caseData.hearing_date && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide flex items-center gap-2 mb-2">
-                    <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    Next Hearing
-                  </p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{new Date(caseData.hearing_date).toLocaleDateString()}</p>
+                <div className="flex flex-col gap-1">
+                  <dt className="l-label inline-flex items-center gap-1.5">
+                    <Calendar aria-hidden="true" className="w-3.5 h-3.5" /> Next Hearing
+                  </dt>
+                  <dd className="m-0 font-semibold">{new Date(caseData.hearing_date).toLocaleDateString()}</dd>
                 </div>
               )}
               {caseData.expected_closure_date && (
-                <div className="p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">Expected Closure</p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{new Date(caseData.expected_closure_date).toLocaleDateString()}</p>
+                <div className="flex flex-col gap-1">
+                  <dt className="l-label">Expected Closure</dt>
+                  <dd className="m-0 font-semibold">{new Date(caseData.expected_closure_date).toLocaleDateString()}</dd>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </dl>
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="hearings">
+          <HearingLog
+            caseId={caseId}
+            chamberId={caseData.chamber_id}
+            court={caseData.court}
+            onOutcomeSaved={() => getCaseDeadlines(caseId).then(({ deadlines }) => setDeadlines(deadlines))}
+          />
+        </TabsContent>
+
+        <TabsContent value="deadlines">
+          <CaseDeadlines caseId={caseId} chamberId={caseData.chamber_id} onChange={setDeadlines} />
+        </TabsContent>
+
+        <TabsContent value="fees">
+          <CaseFeesPanel caseInfo={{ ...caseData, chamberName: caseData.chambers?.name }} />
         </TabsContent>
 
         <TabsContent value="documents">
-          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-slate-900 dark:text-white">Case Documents</CardTitle>
-              <div className="relative">
+          <Panel
+            title="Case Documents"
+            flush
+            action={
+              <>
                 <input
                   type="file"
                   id="file-upload"
-                  className="hidden"
+                  className="sr-only"
+                  multiple
+                  accept={DOCUMENT_ACCEPT}
                   onChange={handleFileUpload}
                   disabled={uploading}
                 />
-                <Button
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700"
+                <button
+                  type="button"
+                  className="l-btn l-btn--outline l-btn--compact"
                   disabled={uploading}
                   onClick={() => document.getElementById('file-upload')?.click()}
                 >
-                  {uploading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4 mr-2" />
-                  )}
-                  Upload Document
-                </Button>
+                  {uploading ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> : <Upload aria-hidden="true" className="w-4 h-4" />}
+                  {uploading ? 'Uploading…' : 'Upload Document'}
+                </button>
+              </>
+            }
+          >
+            {docError && (
+              <div className="px-5 pt-4">
+                <DashAlert>{docError}</DashAlert>
               </div>
-            </CardHeader>
-            <CardContent>
-              {documents.length === 0 ? (
-                <p className="text-slate-500 dark:text-slate-400 py-8 text-center">No documents uploaded</p>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map((doc: any) => (
-                    <a
-                      key={doc.id}
-                      href={doc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 p-4 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 group"
-                    >
-                      <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 dark:text-white truncate">{doc.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {new Date(doc.created_at || doc.uploaded_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex-shrink-0">Download</span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+            {documents.length === 0 ? (
+              <EmptyState icon={FileText} title="No documents uploaded" hint="PDF, photos of orders, Word or Excel. Up to 15 MB each." />
+            ) : (
+              <ul className="l-rows">
+                {documents.map((doc) => (
+                  <li key={doc.id}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <FileText aria-hidden="true" className="w-5 h-5 shrink-0 l-muted" />
+                      <span className="flex flex-col min-w-0 flex-1">
+                        <span className="font-medium truncate">{doc.name}</span>
+                        <span className="text-sm l-muted">
+                          {new Date(doc.created_at).toLocaleDateString()}
+                          {doc.size ? ` · ${formatSize(doc.size)}` : ''}
+                          {doc.uploader?.full_name ? ` · ${doc.uploader.full_name}` : ''}
+                          {!doc.storage_path && ' · file missing'}
+                        </span>
+                      </span>
+                      {doc.storage_path && (
+                        <>
+                          <button type="button" className="l-icon-btn" aria-label={`View ${doc.name}`} onClick={() => openDocument(doc)}>
+                            <Eye aria-hidden="true" className="w-4 h-4" />
+                          </button>
+                          <button type="button" className="l-icon-btn" aria-label={`Download ${doc.name}`} onClick={() => openDocument(doc, true)}>
+                            <Download aria-hidden="true" className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      <button type="button" className="l-icon-btn" aria-label={`Delete ${doc.name}`} onClick={() => setConfirmDelete(doc)}>
+                        <Trash2 aria-hidden="true" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <DashDialog
+            open={!!confirmDelete}
+            onOpenChange={(open) => !open && setConfirmDelete(null)}
+            title="Delete document?"
+            description={confirmDelete ? `"${confirmDelete.name}" will be removed from this case.` : undefined}
+          >
+            <div className="l-dialog-actions">
+              <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="l-btn l-btn--primary l-btn--compact"
+                onClick={async () => {
+                  const doc = confirmDelete;
+                  setConfirmDelete(null);
+                  if (doc) await removeDocument(doc);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </DashDialog>
         </TabsContent>
 
         <TabsContent value="tasks">
-          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-slate-900 dark:text-white">Case Tasks</CardTitle>
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowTaskModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Task
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {tasks.length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckSquare2 className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-3" />
-                  <p className="text-slate-500 dark:text-slate-400 mb-4">No tasks yet</p>
-                  <Button variant="outline" size="sm" onClick={() => setShowTaskModal(true)}>
+          <Panel
+            title="Case Tasks"
+            flush
+            action={
+              <button type="button" className="l-btn l-btn--primary l-btn--compact" onClick={() => setShowTaskModal(true)}>
+                <Plus aria-hidden="true" className="w-4 h-4" /> Add Task
+              </button>
+            }
+          >
+            {tasks.length === 0 ? (
+              <EmptyState
+                icon={CheckSquare2}
+                title="No tasks yet"
+                action={
+                  <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={() => setShowTaskModal(true)}>
                     Create your first task
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {tasks.map((task: any) => (
-                    <div key={task.id} className="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                      <CheckSquare2 className={`w-5 h-5 flex-shrink-0 mt-0.5 ${task.status === 'completed' ? 'text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500'
-                        }`} />
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900 dark:text-white">{task.title}</p>
-                        {task.due_date && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Due: {new Date(task.due_date).toLocaleDateString()}
-                          </p>
-                        )}
-                        {task.assigned_user?.full_name && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Assigned: {task.assigned_user.full_name}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${task.status === 'completed'
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                          : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                        }`}>
-                        {task.status?.toUpperCase()}
+                  </button>
+                }
+              />
+            ) : (
+              <ul className="l-rows">
+                {tasks.map((task: any) => (
+                  <li key={task.id}>
+                    <div className="flex items-start gap-3">
+                      <CheckSquare2
+                        aria-hidden="true"
+                        className={`w-5 h-5 shrink-0 mt-0.5 ${task.status === 'completed' ? 'text-primary' : 'text-muted-foreground'}`}
+                      />
+                      <span className="flex flex-col gap-1 min-w-0 flex-1">
+                        <span className="font-medium">{task.title}</span>
+                        {task.due_date && <span className="text-sm l-muted">Due: {new Date(task.due_date).toLocaleDateString()}</span>}
+                        {task.assigned_user?.full_name && <span className="text-sm l-muted">Assigned: {task.assigned_user.full_name}</span>}
                       </span>
+                      <StatusChip status={task.status}>{task.status?.toUpperCase()}</StatusChip>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         </TabsContent>
 
         <TabsContent value="notes">
-          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-slate-900 dark:text-white">Case Notes & Discussions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Add Note Input */}
-              <div className="mb-6 flex gap-2">
-                <Textarea
-                  placeholder="Type a note or message here..."
-                  className="min-h-[80px]"
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                />
-                <Button
-                  className="h-auto self-end bg-blue-600 hover:bg-blue-700"
+          <Panel title="Case Notes & Discussions">
+            <div className="flex flex-col gap-5">
+              <div className="flex gap-3 items-end">
+                <label className="flex-1">
+                  <span className="sr-only">New note</span>
+                  <textarea
+                    className="l-dash-input"
+                    placeholder="Type a note or message here..."
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="l-btn l-btn--primary l-btn--compact"
                   onClick={handleCreateNote}
                   disabled={submittingNote || !noteContent.trim()}
+                  aria-label="Send note"
                 >
-                  {submittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </Button>
+                  {submittingNote ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> : <Send aria-hidden="true" className="w-4 h-4" />}
+                </button>
               </div>
 
               {notes.length === 0 ? (
-                <p className="text-slate-500 dark:text-slate-400 py-8 text-center">No notes yet</p>
+                <p className="l-muted text-sm">No notes yet</p>
               ) : (
-                <div className="space-y-3">
+                <ul className="flex flex-col gap-3 m-0 p-0 list-none">
                   {notes.map((note: any) => (
-                    <div key={note.id} className="p-4 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="w-full">
-                          <div className="flex justify-between mb-1">
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{note.sender?.full_name || 'Unknown User'}</span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
-                              {new Date(note.created_at).toLocaleString()}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                        </div>
-                      </div>
-                    </div>
+                    <li key={note.id} className="rounded-2xl border border-border bg-secondary p-4 flex flex-col gap-2">
+                      <span className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-semibold">{note.sender?.full_name || 'Unknown User'}</span>
+                        <span className="text-xs l-muted">{new Date(note.created_at).toLocaleString()}</span>
+                      </span>
+                      <p className="m-0 leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
         </TabsContent>
       </Tabs>
 
@@ -379,4 +443,10 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
       />
     </div>
   );
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -1,207 +1,77 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { renderLawyerInvite } from '@/lib/email/invite-template';
+import { sendMail } from '@/lib/server/mailer';
+import { errorResponse, HttpError, onboardingUrl, requireChamberAdmin, supabaseAdmin, TEAM_ROLES, type TeamRole } from '@/lib/server/chamber-admin';
 
-// Check for service key
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-    console.error('SUPABASE_SERVICE_ROLE_KEY is missing in environment variables');
-}
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Use service role key for admin operations
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey || '', // Fallback to empty string to allow build, but will fail if used
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-);
-
-// Helper to generate a strong random password
-function generatePassword(length = 16) {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    let retVal = "";
-    for (let i = 0, n = charset.length; i < length; ++i) {
-        retVal += charset.charAt(Math.floor(Math.random() * n));
-    }
-    return retVal;
-}
-
-export async function POST(request: NextRequest) {
+/**
+ * Invite a lawyer or munshi to the caller's chamber. The caller must be the chamber's admin;
+ * the chamber comes from their membership. Supabase creates the account and the
+ * one-time link (generateLink sends nothing); Nodemailer sends the email.
+ */
+export async function POST(request: Request) {
     try {
-        if (!serviceRoleKey) {
-            throw new Error('Server configuration error: Missing Service Role Key');
-        }
+        const { chamberId, chamberName } = await requireChamberAdmin();
+        const body = await request.json().catch(() => ({}));
+        const email = String(body.email ?? '').trim().toLowerCase();
+        const fullName = String(body.full_name ?? '').trim();
+        if (!EMAIL.test(email) || !fullName) throw new HttpError(400, 'A valid email and full name are required');
+        const role: TeamRole = TEAM_ROLES.includes(body.role) ? body.role : 'lawyer';
+        const label = role === 'munshi' ? 'munshi' : 'lawyer';
 
-        const body = await request.json();
-        const { email, full_name, phone, specialization, bar_number, chamber_id } = body;
+        const admin = supabaseAdmin();
+        const { data: existing } = await admin.from('users').select('id, role').eq('email', email).maybeSingle();
 
-        if (!email || !full_name) {
-            return NextResponse.json(
-                { error: 'Email and full name are required' },
-                { status: 400 }
-            );
-        }
-
-        // Check if user already exists
-        const { data: existingUser, error: checkError } = await supabaseAdmin
-            .from('users')
-            .select('id, chamber_id')
-            .eq('email', email)
-            .single();
-
-        if (checkError && checkError.code !== 'PGRST116') {
-            console.error('Database check error:', checkError);
-            throw checkError;
-        }
-
-        if (existingUser) {
-            // User exists - check if they're already in a chamber
-            if (existingUser.chamber_id) {
-                return NextResponse.json(
-                    { error: 'This lawyer is already associated with a chamber' },
-                    { status: 400 }
-                );
+        let userId: string;
+        let link: string;
+        if (existing) {
+            // Never change an account's role from here (client, admin, or lawyer ↔ munshi).
+            if (existing.role !== role) throw new HttpError(409, `This email belongs to an account that is not a ${label} account`);
+            const { data: membership } = await admin
+                .from('chamber_members')
+                .select('chamber_id')
+                .eq('user_id', existing.id)
+                .neq('is_active', false)
+                .limit(1)
+                .maybeSingle();
+            if (membership) {
+                throw new HttpError(409, membership.chamber_id === chamberId ? `This ${label} is already in your chamber` : `This ${label} already belongs to another chamber`);
             }
-
-            // Update existing user to join this chamber
-            const { error: updateError } = await supabaseAdmin
-                .from('users')
-                .update({
-                    chamber_id,
-                    phone,
-                    specialization,
-                    bar_number,
-                    role: 'lawyer',
-                    status: 'active'
-                })
-                .eq('id', existingUser.id);
-
-            if (updateError) {
-                console.error('Database update error:', updateError);
-                throw updateError;
-            }
-
-            // Send invitation email (via password reset) for existing user
-            const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
-
-            // We use the supabaseAdmin client but call resetPasswordForEmail
-            // Note: This sends a "Reset Password" email, which acts as the invitation/setup link
-            const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-                redirectTo: redirectUrl
-            });
-
-            if (emailError) {
-                console.warn('Failed to send invitation email to existing user:', emailError);
-            }
-
-            return NextResponse.json({
-                success: true,
-                message: 'Existing user added to chamber and invitation email sent',
-                user_id: existingUser.id
-            });
-        }
-
-        // Create a new user and send them an invitation email
-        // Direct to onboarding page to handle client-side hash (Implicit Flow)
-        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
-
-        // Use inviteUserByEmail which sends the email automatically
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-            email,
-            {
-                data: {
-                    full_name,
-                    role: 'lawyer'
-                },
-                redirectTo: redirectUrl
-            }
-        );
-
-        if (authError) {
-            console.error('Auth invite error:', authError);
-            if (authError.message.includes('already been registered')) {
-                // Should have been caught by existingUser check, but just in case
-                return NextResponse.json(
-                    { error: 'An account with this email already exists.' },
-                    { status: 400 }
-                );
-            }
-            throw authError;
-        }
-
-        if (!authData.user) {
-            throw new Error('Failed to create user');
-        }
-
-        // Create or update the user profile
-        const { error: profileError } = await supabaseAdmin
-            .from('users')
-            .upsert({
-                id: authData.user.id,
+            const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: onboardingUrl() } });
+            if (error) throw error;
+            userId = existing.id;
+            link = data.properties.action_link;
+        } else {
+            // Creates the auth user; the handle_new_user trigger creates the users row with this role.
+            const { data, error } = await admin.auth.admin.generateLink({
+                type: 'invite',
                 email,
-                full_name,
-                role: 'lawyer',
-                chamber_id,
-                phone,
-                specialization,
-                bar_number,
-                status: 'pending'
+                options: { data: { full_name: fullName, role }, redirectTo: onboardingUrl() },
             });
-
-        if (profileError) {
-            console.error('Profile create error:', profileError);
-            // Don't rollback auth user as the email is already sent
-            throw profileError;
+            if (error) throw error;
+            userId = data.user.id;
+            link = data.properties.action_link;
         }
 
-        console.log(`User invited successfully: ${email}`);
+        const { error: memberError } = await admin
+            .from('chamber_members')
+            .upsert({ chamber_id: chamberId, user_id: userId, role: role === 'munshi' ? 'munshi' : 'member', is_active: true }, { onConflict: 'chamber_id,user_id' });
+        if (memberError) throw memberError;
 
-        return NextResponse.json({
-            success: true,
-            message: 'Lawyer invited and email sent successfully.',
-            user_id: authData.user.id
-        });
-
-    } catch (error: any) {
-        console.error('Error inviting lawyer (Full details):', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to invite lawyer' },
-            { status: 500 }
-        );
-    }
-}
-
-export async function GET(request: NextRequest) {
-    try {
-        const { searchParams } = new URL(request.url);
-        const chamber_id = searchParams.get('chamber_id');
-
-        if (!chamber_id) {
-            return NextResponse.json(
-                { error: 'Chamber ID is required' },
-                { status: 400 }
-            );
+        if (role === 'lawyer') {
+            const { data: profile } = await admin.from('lawyers').select('id').eq('user_id', userId).maybeSingle();
+            if (!profile) await admin.from('lawyers').insert({ user_id: userId });
         }
 
-        const { data, error } = await supabaseAdmin
-            .from('users')
-            .select('*')
-            .eq('role', 'lawyer')
-            .eq('chamber_id', chamber_id)
-            .order('created_at', { ascending: false });
+        try {
+            await sendMail({ to: email, ...renderLawyerInvite({ fullName, chamberName, link, kind: 'invite' }) });
+        } catch (mailError) {
+            console.error('Invite email failed:', mailError);
+            throw new HttpError(502, `The ${label} was added, but the invitation email could not be sent. Check the SMTP settings, then use Resend Invite.`);
+        }
 
-        if (error) throw error;
-
-        return NextResponse.json({ lawyers: data });
-
-    } catch (error: any) {
-        console.error('Error fetching lawyers:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to fetch lawyers' },
-            { status: 500 }
-        );
+        return Response.json({ success: true, user_id: userId });
+    } catch (error) {
+        return errorResponse(error);
     }
 }
