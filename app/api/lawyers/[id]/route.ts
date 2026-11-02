@@ -1,173 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { errorResponse, HttpError, requireChamberAdmin, requireMemberLawyer, supabaseAdmin } from '@/lib/server/chamber-admin';
 
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-    console.error('SUPABASE_SERVICE_ROLE_KEY is missing in environment variables');
-}
+type Params = { params: Promise<{ id: string }> };
 
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey || '',
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-);
-
-// DELETE - Remove lawyer from chamber
-export async function DELETE(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+/**
+ * Remove a lawyer from the caller's chamber: their membership is deactivated. Their
+ * account is kept (it is theirs, and their hearing history stays attributable);
+ * Resend Invite brings them back.
+ */
+export async function DELETE(_request: Request, { params }: Params) {
     try {
-        if (!serviceRoleKey) {
-            throw new Error('Server configuration error: Missing Service Role Key');
-        }
+        const { chamberId, adminId } = await requireChamberAdmin();
+        const { id } = await params;
+        if (id === adminId) throw new HttpError(400, 'You cannot remove yourself');
+        const { membershipId } = await requireMemberLawyer(chamberId, id);
 
-        const { id: lawyerId } = await params;
-
-        if (!lawyerId) {
-            return NextResponse.json(
-                { error: 'Lawyer ID is required' },
-                { status: 400 }
-            );
-        }
-
-        // Verify the lawyer exists and is actually a lawyer
-        const { data: lawyer, error: checkError } = await supabaseAdmin
-            .from('users')
-            .select('id, role, chamber_id')
-            .eq('id', lawyerId)
-            .single();
-
-        if (checkError || !lawyer) {
-            return NextResponse.json(
-                { error: 'Lawyer not found' },
-                { status: 404 }
-            );
-        }
-
-        if (lawyer.role !== 'lawyer') {
-            return NextResponse.json(
-                { error: 'User is not a lawyer' },
-                { status: 400 }
-            );
-        }
-
-        // Remove lawyer from chamber (set chamber_id to null and status to inactive)
-        // OR completely delete the user from auth and database
-
-        // Option 1: Soft delete - just remove from chamber (keep their account)
-        // const { error: updateError } = await supabaseAdmin
-        //     .from('users')
-        //     .update({ 
-        //         chamber_id: null, 
-        //         status: 'inactive' 
-        //     })
-        //     .eq('id', lawyerId);
-
-        // Option 2: Hard delete - completely remove user from auth and database
-
-        // First, delete from users table with soft delete (set deleted_at)
-        const { error: softDeleteError } = await supabaseAdmin
-            .from('users')
-            .update({
-                deleted_at: new Date().toISOString(),
-                chamber_id: null,
-                status: 'inactive'
-            })
-            .eq('id', lawyerId);
-
-        if (softDeleteError) {
-            console.error('Error soft deleting lawyer from users table:', softDeleteError);
-            throw softDeleteError;
-        }
-
-        // Then, delete from Supabase Auth (this is permanent)
-        const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(
-            lawyerId
-        );
-
-        if (authDeleteError) {
-            console.error('Error deleting lawyer from auth:', authDeleteError);
-            // Rollback the soft delete if auth deletion fails
-            await supabaseAdmin
-                .from('users')
-                .update({
-                    deleted_at: null,
-                    status: 'active'
-                })
-                .eq('id', lawyerId);
-            throw authDeleteError;
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: 'Lawyer removed from chamber successfully'
-        });
-
-    } catch (error: any) {
-        console.error('Error in DELETE /api/lawyers/[id]:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to remove lawyer' },
-            { status: 500 }
-        );
+        const { error } = await supabaseAdmin().from('chamber_members').update({ is_active: false }).eq('id', membershipId);
+        if (error) throw error;
+        return Response.json({ success: true });
+    } catch (error) {
+        return errorResponse(error);
     }
 }
 
-// PATCH - Update lawyer status
-export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+/** Set a lawyer active or inactive in the caller's chamber. */
+export async function PATCH(request: Request, { params }: Params) {
     try {
-        if (!serviceRoleKey) {
-            throw new Error('Server configuration error: Missing Service Role Key');
-        }
+        const { chamberId, adminId } = await requireChamberAdmin();
+        const { id } = await params;
+        const body = await request.json().catch(() => ({}));
+        if (body.status !== 'active' && body.status !== 'inactive') throw new HttpError(400, 'Status must be active or inactive');
+        if (id === adminId) throw new HttpError(400, 'You cannot change your own status');
+        const { membershipId } = await requireMemberLawyer(chamberId, id);
 
-        const { id: lawyerId } = await params;
-        const body = await request.json();
-        const { status } = body;
-
-        if (!lawyerId) {
-            return NextResponse.json(
-                { error: 'Lawyer ID is required' },
-                { status: 400 }
-            );
-        }
-
-        if (!status || !['active', 'inactive', 'pending'].includes(status)) {
-            return NextResponse.json(
-                { error: 'Valid status is required (active, inactive, pending)' },
-                { status: 400 }
-            );
-        }
-
-        // Update lawyer status
-        const { error: updateError } = await supabaseAdmin
-            .from('users')
-            .update({ status })
-            .eq('id', lawyerId)
-            .eq('role', 'lawyer');
-
-        if (updateError) {
-            console.error('Error updating lawyer status:', updateError);
-            throw updateError;
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: `Lawyer status updated to ${status}`
-        });
-
-    } catch (error: any) {
-        console.error('Error in PATCH /api/lawyers/[id]:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to update lawyer status' },
-            { status: 500 }
-        );
+        const { error } = await supabaseAdmin().from('chamber_members').update({ is_active: body.status === 'active' }).eq('id', membershipId);
+        if (error) throw error;
+        return Response.json({ success: true });
+    } catch (error) {
+        return errorResponse(error);
     }
 }

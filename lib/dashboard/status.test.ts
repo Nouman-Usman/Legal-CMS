@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { statusTone } from './status.ts';
 
 test('live statuses are lime', () => {
-    for (const s of ['active', 'open', 'converted', 'completed']) assert.equal(statusTone(s), 'lime', s);
+    for (const s of ['active', 'open', 'converted', 'completed', 'decided']) assert.equal(statusTone(s), 'lime', s);
 });
 
 test('waiting statuses are violet', () => {

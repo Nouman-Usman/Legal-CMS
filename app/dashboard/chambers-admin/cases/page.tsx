@@ -114,10 +114,10 @@ export default function CasesPage() {
         // Enrich with client and lawyer names in parallel for performance
         const enrichedCases = await Promise.all(
           (data || []).map(async (caseItem: any) => {
-            let clientName = '';
+            let clientName = caseItem.client_name || '';
             let lawyerName = '';
 
-            if (caseItem.client_id) {
+            if (!clientName && caseItem.client_id) {
               const { data: clientData } = await supabase
                 .from('users')
                 .select('full_name')

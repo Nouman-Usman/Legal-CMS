@@ -75,7 +75,8 @@
 
 /* ─── page ─── */
 .l-dash .l-dash-root {
-    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
     background: radial-gradient(60% 40% at 100% 0%, rgb(60 28 126 / 0.35), transparent 70%), var(--l-canvas);
 }
 
@@ -636,6 +637,25 @@
         gap: 3px;
         width: 100%;
     }
+}
+
+/* ─── daily docket ─── */
+.l-dash .l-docket-sr {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--l-surface-2);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.l-dash .l-docket-row[data-clash] {
+    background: var(--l-danger-soft);
 }
 
 /* ─── tables and phone rows ─── */

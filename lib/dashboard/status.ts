@@ -6,6 +6,7 @@ const TONES: Record<string, ChipTone> = {
     open: 'lime',
     converted: 'lime',
     completed: 'lime',
+    decided: 'lime',
     pending: 'violet',
     new: 'violet',
     contacted: 'violet',

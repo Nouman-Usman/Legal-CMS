@@ -64,7 +64,7 @@
     pointer-events: none;
 }
 
-.landing > :not(.space-layer) {
+.landing:not(.l-dash-root, .l-dash, .l-auth) > :not(.space-layer) {
     position: relative;
     z-index: 1;
 }

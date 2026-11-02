@@ -47,6 +47,7 @@ import {
   Area
 } from 'recharts';
 import { CHART } from '@/lib/dashboard/chart';
+import { TodayHearingsPanel } from '@/components/hearings/today-panel';
 import { DashAlert, DashPage, EmptyState, PageHeader, Panel, StatTile, StatusChip } from '@/components/dashboard/ui';
 
 export default function ChambersAdminDashboard() {
@@ -86,12 +87,13 @@ export default function ChambersAdminDashboard() {
 
         // 1. Fetch Basic Counts & All Cases for analytical processing
         const [lawyersRes, casesCountRes, allCasesRes] = await Promise.all([
+          // Lawyers are chamber members whose account role is lawyer (no users.chamber_id column)
           supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true })
+            .from('chamber_members')
+            .select('user_id, users:user_id!inner(role)', { count: 'exact', head: true })
             .eq('chamber_id', chamberId)
-            .eq('role', 'lawyer')
-            .is('deleted_at', null),
+            .neq('is_active', false)
+            .eq('users.role', 'lawyer'),
           supabase
             .from('cases')
             .select('*', { count: 'exact', head: true })
@@ -99,7 +101,7 @@ export default function ChambersAdminDashboard() {
             .is('deleted_at', null),
           supabase
             .from('cases')
-            .select('id, status, priority, created_at, client_id')
+            .select('id, status, priority, created_at, client_id, client_name')
             .eq('chamber_id', chamberId)
             .is('deleted_at', null)
         ]);
@@ -161,7 +163,8 @@ export default function ChambersAdminDashboard() {
           .limit(5);
 
         // 6. Unique Clients
-        const uniqueClients = new Set(allCases.map(c => c.client_id).filter(Boolean)).size;
+        // Clients are mostly name/phone on the case; a linked account counts by id.
+        const uniqueClients = new Set(allCases.map(c => c.client_id || c.client_name?.trim().toLowerCase()).filter(Boolean)).size;
 
         setStats({
           lawyersCount: lawyersRes.count || 0,
@@ -321,6 +324,8 @@ export default function ChambersAdminDashboard() {
             </Panel>
           </div>
 
+          <div className="l-grid">
+          <TodayHearingsPanel docketHref="/dashboard/chambers-admin/docket" casePath={(id) => `/dashboard/chambers-admin/cases/${id}`} />
           <Panel title="Quick Links" flush>
             <ul className="l-rows">
               {quickLinks.map((hub) => (
@@ -334,6 +339,7 @@ export default function ChambersAdminDashboard() {
               ))}
             </ul>
           </Panel>
+          </div>
         </div>
       </DashPage>
     </ProtectedRoute>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { getChamberRoster, updateLawyerProfile } from '@/lib/supabase/lawyers';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import {
@@ -29,6 +30,7 @@ import {
   Sparkles,
   Filter,
   Calendar,
+  RotateCcw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -92,7 +94,7 @@ export default function LawyersPage() {
         {
           event: '*',
           schema: 'public',
-          table: 'users',
+          table: 'chamber_members',
           filter: `chamber_id=eq.${user.chamber_id}`,
         },
         () => {
@@ -114,15 +116,10 @@ export default function LawyersPage() {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'lawyer')
-        .eq('chamber_id', user.chamber_id)
-        .order('created_at', { ascending: false });
-
+      // Roster comes from chamber membership (there is no users.chamber_id column)
+      const { lawyers: roster, error } = await getChamberRoster(user.chamber_id);
       if (error) throw error;
-      setLawyers(data || []);
+      setLawyers(roster);
     } catch (err) {
       console.error('Error fetching lawyers:', err);
     } finally {
@@ -167,16 +164,7 @@ export default function LawyersPage() {
     setUpdatingLawyer(true);
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: editingLawyer.full_name,
-          phone: editingLawyer.phone,
-          specialization: editingLawyer.specialization,
-          bar_number: editingLawyer.bar_number,
-        })
-        .eq('id', editingLawyer.id);
-
+      const { error } = await updateLawyerProfile(editingLawyer);
       if (error) throw error;
 
       setSuccess('Lawyer updated successfully');
@@ -226,8 +214,8 @@ export default function LawyersPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to update lawyer status');
 
-      setLawyers(prev => prev.map(l => l.id === lawyerId ? { ...l, status: newStatus } : l));
-      setSuccess(`Lawyer status updated to ${newStatus}`);
+      setSuccess(newStatus === 'active' ? 'Lawyer restored to the chamber' : `Lawyer status updated to ${newStatus}`);
+      fetchLawyers();
     } catch (err: any) {
       setError(err.message || 'Failed to update lawyer status');
     }
@@ -247,8 +235,8 @@ export default function LawyersPage() {
         throw new Error(result.error || 'Failed to remove lawyer');
       }
 
-      setLawyers(prev => prev.filter(l => l.id !== lawyerId));
       setSuccess('Lawyer removed from chamber');
+      fetchLawyers();
     } catch (err: any) {
       console.error('Error removing lawyer:', err);
       setError(err.message || 'Failed to remove lawyer');
@@ -259,7 +247,8 @@ export default function LawyersPage() {
     const matchesSearch = lawyer.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lawyer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lawyer.specialization?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || lawyer.status === statusFilter;
+    // "All" is the current roster; removed (inactive) lawyers only show under Inactive.
+    const matchesStatus = statusFilter === 'all' ? lawyer.status !== 'inactive' : lawyer.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -280,7 +269,7 @@ export default function LawyersPage() {
         />
 
         <div className="l-stats">
-          <StatTile label="Total Lawyers" value={lawyers.length} icon={Gavel} />
+          <StatTile label="Total Lawyers" value={lawyers.filter((l) => l.status !== 'inactive').length} icon={Gavel} />
           <StatTile label="Active Lawyers" value={lawyers.filter((l) => l.status === 'active').length} icon={ShieldCheck} />
           <StatTile label="Pending Invitations" value={lawyers.filter((l) => l.status === 'pending').length} icon={Send} />
         </div>
@@ -292,7 +281,7 @@ export default function LawyersPage() {
               <div className="flex flex-wrap gap-2" role="group" aria-label="Status">
                 {statusOptions.map((status) => (
                   <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className="l-filter">
-                    {status} <span className="l-muted">{lawyers.filter((l) => (status === 'all' ? true : l.status === status)).length}</span>
+                    {status} <span className="l-muted">{lawyers.filter((l) => (status === 'all' ? l.status !== 'inactive' : l.status === status)).length}</span>
                   </button>
                 ))}
               </div>
@@ -343,9 +332,15 @@ export default function LawyersPage() {
                                 <Send aria-hidden="true" className="w-4 h-4" /> Resend Invite
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem onClick={() => handleRemoveLawyer(lawyer.id)} className="text-destructive">
-                              <Trash2 aria-hidden="true" className="w-4 h-4" /> Remove Lawyer
-                            </DropdownMenuItem>
+                            {lawyer.status === 'inactive' ? (
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(lawyer.id, 'active')}>
+                                <RotateCcw aria-hidden="true" className="w-4 h-4" /> Restore to Chamber
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleRemoveLawyer(lawyer.id)} className="text-destructive">
+                                <Trash2 aria-hidden="true" className="w-4 h-4" /> Remove Lawyer
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

@@ -21,4 +21,11 @@ export const REBUILT: string[] = [
     'components/shared/event-modal.tsx',
     'app/dashboard/chambers-admin/settings/page.tsx',
     'app/dashboard/chambers-admin/setup/page.tsx',
+    'components/hearings/docket-view.tsx',
+    'components/hearings/hearing-log.tsx',
+    'components/hearings/hearing-dialogs.tsx',
+    'components/hearings/today-panel.tsx',
+    'app/dashboard/chambers-admin/docket/page.tsx',
+    'app/dashboard/lawyer/docket/page.tsx',
+    'components/hearings/notify-client-dialog.tsx',
 ];

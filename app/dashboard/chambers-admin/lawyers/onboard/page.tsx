@@ -4,6 +4,7 @@ import React, { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { saveOwnLawyerProfile } from '@/lib/supabase/lawyers';
 import { ProtectedRoute } from '@/lib/components/protected-route';
 import { ArrowLeft, Save, CheckCircle2, Loader2 } from 'lucide-react';
 import { DashAlert, DashPage, PageHeader, Panel } from '@/components/dashboard/ui';
@@ -120,18 +121,8 @@ export default function LawyerOnboardPage() {
         setErrors({ submit: 'User not authenticated' });
         return;
       }
-
-      // Update user with lawyer profile data
-      const { error } = await supabase
-        .from('users')
-        .update({
-          lawyer_profile: profile,
-          onboarding_completed: true,
-          specialization: profile.practiceAreas.join(', '),
-          bar_number: profile.licenseNumber,
-          phone: profile.phone,
-        })
-        .eq('id', user.id);
+      // Contact on users, credentials on the lawyers profile row
+      const { error } = await saveOwnLawyerProfile(user.id, profile);
 
       if (error) {
         throw error;

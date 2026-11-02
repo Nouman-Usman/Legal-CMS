@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { getChamberLawyers } from '@/lib/supabase/hearings';
+import { createClient as createChamberClient, getClientOptions } from '@/lib/supabase/clients';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,8 +48,8 @@ export function CaseFormModal({
 }: CaseFormModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<any[]>([]);
   const [lawyers, setLawyers] = useState<any[]>([]);
+  const [clientOptions, setClientOptions] = useState<Array<{ id: string; full_name: string; phone: string | null }>>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -56,6 +58,9 @@ export function CaseFormModal({
     title: '',
     description: '',
     client_id: '',
+    chamber_client_id: '',
+    client_name: '',
+    client_phone: '',
     assigned_to: '',
     case_type: '',
     priority: 'medium',
@@ -70,24 +75,13 @@ export function CaseFormModal({
       if (!user?.chamber_id) return;
 
       try {
-        // Fetch clients
-        const { data: clientsData } = await supabase
-          .from('users')
-          .select('id, full_name')
-          .eq('chamber_id', user.chamber_id)
-          .eq('role', 'client')
-          .order('full_name');
+        // Lawyers come from chamber membership (there is no users.chamber_id column)
+        const { lawyers: chamberLawyers } = await getChamberLawyers(user.chamber_id);
+        const lawyersData = chamberLawyers.map((l) => ({ id: l.id, full_name: l.name }));
 
-        // Fetch lawyers
-        const { data: lawyersData } = await supabase
-          .from('users')
-          .select('id, full_name')
-          .eq('chamber_id', user.chamber_id)
-          .eq('role', 'lawyer')
-          .order('full_name');
-
-        setClients(clientsData || []);
         setLawyers(lawyersData || []);
+        const { options } = await getClientOptions(user.chamber_id);
+        setClientOptions(options);
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -104,6 +98,9 @@ export function CaseFormModal({
         title: caseData.title || '',
         description: caseData.description || '',
         client_id: caseData.client_id || '',
+        chamber_client_id: caseData.chamber_client_id || '',
+        client_name: caseData.client_name || '',
+        client_phone: caseData.client_phone || '',
         assigned_to: caseData.assigned_to || '',
         case_type: caseData.case_type || '',
         priority: caseData.priority || 'medium',
@@ -131,8 +128,8 @@ export function CaseFormModal({
       setError('Case title is required');
       return false;
     }
-    if (!formData.client_id) {
-      setError('Please select a client');
+    if (!formData.client_name.trim()) {
+      setError('Client name is required');
       return false;
     }
     return true;
@@ -148,8 +145,28 @@ export function CaseFormModal({
       setLoading(true);
       setError('');
 
+      const blankToNull = (v: string | null | undefined) => (v && String(v).trim() ? v : null);
+
+      // A new client is saved to the chamber's client list first, then linked.
+      let chamberClientId = formData.chamber_client_id;
+      if (!chamberClientId) {
+        const { client, error: clientError } = await createChamberClient({
+          chamber_id: user.chamber_id,
+          full_name: formData.client_name,
+          phone: formData.client_phone,
+        });
+        if (clientError || !client) throw clientError || new Error('Could not save the client');
+        chamberClientId = client.id;
+      }
       const payload = {
         ...formData,
+        client_id: blankToNull(formData.client_id),
+        chamber_client_id: chamberClientId,
+        client_name: formData.client_name.trim(),
+        client_phone: blankToNull(formData.client_phone),
+        assigned_to: blankToNull(formData.assigned_to),
+        filing_date: blankToNull(formData.filing_date),
+        next_hearing_date: blankToNull(formData.next_hearing_date),
         chamber_id: user.chamber_id,
       };
 
@@ -219,7 +236,7 @@ export function CaseFormModal({
             )}
 
             {/* Case Number and Title */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="case_number">Case Number *</Label>
                 <Input
@@ -273,21 +290,64 @@ export function CaseFormModal({
             </div>
 
             {/* Client and Lawyer */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="client_id">Client *</Label>
-                <Select value={formData.client_id} onValueChange={(value) => handleInputChange('client_id', value)}>
-                  <SelectTrigger className="bg-secondary border-input min-h-11">
-                    <SelectValue placeholder="Select client" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="chamber_client">Client</Label>
+                <Select
+                  value={formData.chamber_client_id || 'new'}
+                  onValueChange={(value) => {
+                    if (value === 'new') {
+                      setFormData((prev) => ({ ...prev, chamber_client_id: '', client_name: '', client_phone: '' }));
+                    } else {
+                      const picked = clientOptions.find((c) => c.id === value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        chamber_client_id: value,
+                        client_name: picked?.full_name || '',
+                        client_phone: picked?.phone || '',
+                      }));
+                    }
+                    setError('');
+                  }}
+                >
+                  <SelectTrigger id="chamber_client" className="bg-secondary border-input min-h-11">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.full_name}
+                    <SelectItem value="new">+ New client</SelectItem>
+                    {clientOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.full_name}
+                        {c.phone ? ` · ${c.phone}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client_name">Client name *</Label>
+                <Input
+                  id="client_name"
+                  placeholder="e.g. Muhammad Ali"
+                  value={formData.client_name}
+                  onChange={(e) => handleInputChange('client_name', e.target.value)}
+                  readOnly={!!formData.chamber_client_id}
+                  className="bg-secondary border-input min-h-11"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client_phone">Client phone (WhatsApp)</Label>
+                <Input
+                  id="client_phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+92 300 1234567"
+                  value={formData.client_phone}
+                  onChange={(e) => handleInputChange('client_phone', e.target.value)}
+                  readOnly={!!formData.chamber_client_id}
+                  className="bg-secondary border-input min-h-11"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="assigned_to">Assign Lawyer</Label>
@@ -308,7 +368,7 @@ export function CaseFormModal({
             </div>
 
             {/* Priority and Status */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
                 <Select value={formData.priority} onValueChange={(value) => handleInputChange('priority', value)}>
@@ -340,7 +400,7 @@ export function CaseFormModal({
             </div>
 
             {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="filing_date">Filing Date</Label>
                 <Input

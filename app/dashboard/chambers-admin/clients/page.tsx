@@ -199,16 +199,18 @@ export default function ClientsPage() {
                                             <span className="text-xs l-muted">Identity Established: {new Date(client.created_at).toLocaleDateString()}</span>
                                         </div>
                                         <ul className="flex flex-col gap-1.5 m-0 p-0 list-none text-sm l-muted">
-                                            <li className="flex items-center gap-2 min-w-0">
-                                                <Mail aria-hidden="true" className="w-4 h-4 shrink-0" /> <span className="truncate">{client.email}</span>
-                                            </li>
+                                            {client.email && (
+                                                <li className="flex items-center gap-2 min-w-0">
+                                                    <Mail aria-hidden="true" className="w-4 h-4 shrink-0" /> <span className="truncate">{client.email}</span>
+                                                </li>
+                                            )}
                                             {client.phone && (
                                                 <li className="flex items-center gap-2">
                                                     <Phone aria-hidden="true" className="w-4 h-4 shrink-0" /> {client.phone}
                                                 </li>
                                             )}
                                             <li className="flex items-center gap-2">
-                                                <Briefcase aria-hidden="true" className="w-4 h-4 shrink-0" /> {client.cases?.length || 0} Dossiers Active
+                                                <Briefcase aria-hidden="true" className="w-4 h-4 shrink-0" /> {client.cases?.length || 0} {client.cases?.length === 1 ? 'Dossier' : 'Dossiers'}
                                             </li>
                                         </ul>
                                     </li>

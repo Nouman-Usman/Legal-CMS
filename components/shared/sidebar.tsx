@@ -17,6 +17,7 @@ import {
     ShieldCheck,
     FileText,
     Gavel,
+    CalendarClock,
     Search,
     PenTool,
     MessageSquare,
@@ -70,6 +71,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                 {
                     label: 'Management',
                     items: [
+                        { name: 'Daily Docket', href: '/dashboard/chambers-admin/docket', icon: CalendarClock },
                         { name: 'All Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
                         { name: 'All Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
                         { name: 'Our Clients', href: '/dashboard/chambers-admin/clients', icon: Users },
@@ -102,6 +104,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                 {
                     label: 'Operations',
                     items: [
+                        { name: 'Daily Docket', href: '/dashboard/lawyer/docket', icon: CalendarClock },
                         { name: 'My Cases', href: '/dashboard/lawyer/cases', icon: Briefcase },
                         { name: 'My Tasks', href: '/dashboard/lawyer/tasks', icon: FileText },
                     ]

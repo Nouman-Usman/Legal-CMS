@@ -1,88 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { renderLawyerInvite } from '@/lib/email/invite-template';
+import { sendMail } from '@/lib/server/mailer';
+import { errorResponse, HttpError, onboardingUrl, requireChamberAdmin, requireMemberLawyer, supabaseAdmin } from '@/lib/server/chamber-admin';
 
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!serviceRoleKey) {
-    console.error('SUPABASE_SERVICE_ROLE_KEY is missing in environment variables');
-}
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey || '',
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-);
-
-export async function POST(request: NextRequest) {
+/** Resend the invitation to a lawyer of the caller's chamber who has not finished onboarding. */
+export async function POST(request: Request) {
     try {
-        if (!serviceRoleKey) {
-            throw new Error('Server configuration error: Missing Service Role Key');
+        const { chamberId, chamberName } = await requireChamberAdmin();
+        const body = await request.json().catch(() => ({}));
+        const lawyerId = String(body.lawyer_id ?? '');
+        if (!lawyerId) throw new HttpError(400, 'Lawyer ID is required');
+
+        const { membershipId, isActive, user } = await requireMemberLawyer(chamberId, lawyerId);
+        if (user.onboarding_completed) throw new HttpError(409, 'This lawyer has already joined');
+
+        const admin = supabaseAdmin();
+        // An unaccepted invite can be re-issued; if the account is already confirmed, fall back to a sign-in link.
+        let result = await admin.auth.admin.generateLink({ type: 'invite', email: user.email, options: { redirectTo: onboardingUrl() } });
+        if (result.error) {
+            result = await admin.auth.admin.generateLink({ type: 'magiclink', email: user.email, options: { redirectTo: onboardingUrl() } });
+        }
+        if (result.error) throw result.error;
+
+        if (!isActive) {
+            const { error } = await admin.from('chamber_members').update({ is_active: true }).eq('id', membershipId);
+            if (error) throw error;
         }
 
-        const body = await request.json();
-        const { lawyer_id, email } = body;
-
-        if (!lawyer_id || !email) {
-            return NextResponse.json(
-                { error: 'Lawyer ID and email are required' },
-                { status: 400 }
-            );
+        try {
+            await sendMail({
+                to: user.email,
+                ...renderLawyerInvite({ fullName: user.full_name || user.email, chamberName, link: result.data.properties.action_link, kind: 'reminder' }),
+            });
+        } catch (mailError) {
+            console.error('Resend email failed:', mailError);
+            throw new HttpError(502, 'The invitation email could not be sent. Check the SMTP settings.');
         }
 
-        // Verify the lawyer exists and belongs to a chamber
-        const { data: lawyer, error: lawyerError } = await supabaseAdmin
-            .from('users')
-            .select('id, email, status, chamber_id, full_name')
-            .eq('id', lawyer_id)
-            .eq('role', 'lawyer')
-            .single();
-
-        if (lawyerError || !lawyer) {
-            return NextResponse.json(
-                { error: 'Lawyer not found' },
-                { status: 404 }
-            );
-        }
-
-        // Send invitation email (using reset password flow as it acts as magic link)
-        const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/onboarding`;
-
-        const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-            redirectTo: redirectUrl
-        });
-
-        if (emailError) {
-            console.error('Failed to send invite email:', emailError);
-            return NextResponse.json(
-                { error: 'Failed to send invitation email' },
-                { status: 500 }
-            );
-        }
-
-        // Update the lawyer's status to pending if it was inactive
-        if (lawyer.status === 'inactive') {
-            await supabaseAdmin
-                .from('users')
-                .update({ status: 'pending' })
-                .eq('id', lawyer_id);
-        }
-
-        console.log(`Resend invite: Email sent to ${email}`);
-
-        return NextResponse.json({
-            success: true,
-            message: 'Invitation email sent successfully'
-        });
-
-    } catch (error: any) {
-        console.error('Error resending invitation:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to resend invitation' },
-            { status: 500 }
-        );
+        return Response.json({ success: true });
+    } catch (error) {
+        return errorResponse(error);
     }
 }

@@ -52,12 +52,9 @@ export function ClientFormModal({
             setError('Full name is required');
             return false;
         }
-        if (!formData.email.trim()) {
-            setError('Email is required');
-            return false;
-        }
+        // Email is optional: many clients only have a phone / WhatsApp number.
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
+        if (formData.email.trim() && !emailRegex.test(formData.email.trim())) {
             setError('Please enter a valid email address');
             return false;
         }
@@ -125,24 +122,25 @@ export function ClientFormModal({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="email">Email Address *</Label>
+                        <Label htmlFor="phone">Phone (WhatsApp)</Label>
                         <Input
-                            id="email"
-                            type="email"
-                            placeholder="john@example.com"
-                            value={formData.email}
-                            onChange={(e) => handleInputChange('email', e.target.value)}
-                            required
+                            id="phone"
+                            type="tel"
+                            inputMode="tel"
+                            placeholder="+92 300 1234567"
+                            value={formData.phone}
+                            onChange={(e) => handleInputChange('phone', e.target.value)}
                         />
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="email">Email (optional)</Label>
                         <Input
-                            id="phone"
-                            placeholder="+92 300 1234567"
-                            value={formData.phone}
-                            onChange={(e) => handleInputChange('phone', e.target.value)}
+                            id="email"
+                            type="email"
+                            placeholder="name@example.com"
+                            value={formData.email}
+                            onChange={(e) => handleInputChange('email', e.target.value)}
                         />
                     </div>
 

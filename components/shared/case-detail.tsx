@@ -7,6 +7,7 @@ import { Loader2, FileText, CheckSquare2, Calendar, Plus, Upload, Send } from 'l
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TaskModal } from '@/components/shared/task-modal';
 import { DashAlert, EmptyState, Panel, StatusChip } from '@/components/dashboard/ui';
+import { HearingLog } from '@/components/hearings/hearing-log';
 
 interface CaseDetailProps {
   caseId: string;
@@ -127,6 +128,7 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
     { term: 'Priority', value: caseData.priority },
     { term: 'Filing Date', value: caseData.filing_date ? new Date(caseData.filing_date).toLocaleDateString() : 'N/A' },
     { term: 'Assigned Lawyer', value: caseData.assigned_lawyer?.full_name || 'Unassigned' },
+    { term: 'Client', value: [caseData.client_name, caseData.client_phone].filter(Boolean).join(' · ') || 'Not set' },
   ];
 
   return (
@@ -140,7 +142,7 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
             </div>
             <StatusChip status={caseData.status}>{caseData.status?.toUpperCase()}</StatusChip>
           </div>
-          <dl className="grid grid-cols-2 lg:grid-cols-4 gap-4 m-0">
+          <dl className="grid grid-cols-2 lg:grid-cols-5 gap-4 m-0">
             {facts.map((fact) => (
               <div key={fact.term} className="flex flex-col gap-1">
                 <dt className="l-label">{fact.term}</dt>
@@ -154,6 +156,7 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
         <TabsList className="l-tabs">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="hearings">Hearings</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
@@ -182,6 +185,10 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
               )}
             </dl>
           </Panel>
+        </TabsContent>
+
+        <TabsContent value="hearings">
+          <HearingLog caseId={caseId} chamberId={caseData.chamber_id} court={caseData.court} />
         </TabsContent>
 
         <TabsContent value="documents">
