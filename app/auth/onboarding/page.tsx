@@ -13,6 +13,8 @@ export default function LawyerOnboardingPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [step, setStep] = useState<'password' | 'profile'>('password');
+    /** Munshis (clerks) have no specialization or bar registration. */
+    const [isMunshi, setIsMunshi] = useState(false);
 
     // Form state
     const [password, setPassword] = useState('');
@@ -53,22 +55,34 @@ export default function LawyerOnboardingPage() {
                     }
                 }
 
-                // 2. Check for recovery token in hash (from email links)
+                // 2. Tokens in the hash: invite / magic-link / recovery emails (links made by
+                // admin.generateLink use the implicit flow, so they never carry a PKCE code).
                 const hash = window.location.hash;
                 console.log('Hash content:', hash ? `present (${hash.length} chars)` : 'empty');
+                const hashParams = new URLSearchParams(hash.substring(1));
+
+                if (hashParams.get('error')) {
+                    // e.g. otp_expired: the link was already used or is older than 24 hours.
+                    window.history.replaceState({}, document.title, '/auth/onboarding');
+                    setError(
+                        hashParams.get('error_code') === 'otp_expired'
+                            ? 'This invite link has expired or was already used. Ask your chamber admin to resend the invite.'
+                            : hashParams.get('error_description')?.replace(/\+/g, ' ') || 'This link could not be used.',
+                    );
+                    setLoading(false);
+                    return;
+                }
 
                 if (hash && hash.includes('access_token')) {
-                    console.log('Found recovery token in hash, attempting to establish session...');
+                    console.log('Found token in hash, attempting to establish session...');
 
-                    // Parse the hash to extract token data
-                    const hashParams = new URLSearchParams(hash.substring(1));
                     const accessToken = hashParams.get('access_token');
                     const refreshToken = hashParams.get('refresh_token');
                     const type = hashParams.get('type');
 
                     console.log('Token type:', type);
 
-                    if (accessToken && type === 'recovery') {
+                    if (accessToken && ['invite', 'magiclink', 'recovery', 'signup'].includes(type ?? '')) {
                         try {
                             // Manually set the session with the recovery token
                             const { data, error } = await supabase.auth.setSession({
@@ -120,7 +134,9 @@ export default function LawyerOnboardingPage() {
                         console.log('Session found, checking profile...');
                         checkProfile(session);
                     } else if (!code && !hash) {
-                        console.log('No session found, showing password step');
+                        // Setting a password needs the session from the invite link.
+                        console.log('No session found');
+                        setError('Open this page from the link in your invitation email. If the link has expired, ask your chamber admin to resend the invite.');
                         setStep('password');
                         setLoading(false);
                     }
@@ -147,7 +163,7 @@ export default function LawyerOnboardingPage() {
             .eq('id', session.user.id)
             .maybeSingle();
 
-        if (profile && profile.phone && profile.specialization) {
+        if (profile?.onboarding_completed) {
             // Profile already complete - but if they just set password (recovery), allow dashboard
             router.push('/dashboard');
         } else {
@@ -161,11 +177,13 @@ export default function LawyerOnboardingPage() {
             setStep('password');
 
             if (profile) {
+                setIsMunshi(profile.role === 'munshi');
+                const { data: practice } = await supabase.from('lawyers').select('specialization, bar_number').eq('user_id', profile.id).maybeSingle();
                 setFormData({
                     full_name: profile.full_name || '',
                     phone: profile.phone || '',
-                    specialization: profile.specialization || '',
-                    bar_number: profile.bar_number || ''
+                    specialization: practice?.specialization || '',
+                    bar_number: practice?.bar_number || ''
                 });
             }
         }
@@ -208,11 +226,13 @@ export default function LawyerOnboardingPage() {
                     .single();
 
                 if (profile) {
+                    setIsMunshi(profile.role === 'munshi');
+                    const { data: practice } = await supabase.from('lawyers').select('specialization, bar_number').eq('user_id', profile.id).maybeSingle();
                     setFormData({
                         full_name: profile.full_name || '',
                         phone: profile.phone || '',
-                        specialization: profile.specialization || '',
-                        bar_number: profile.bar_number || ''
+                        specialization: practice?.specialization || '',
+                        bar_number: practice?.bar_number || ''
                     });
                 }
             }
@@ -232,20 +252,26 @@ export default function LawyerOnboardingPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('No user found');
 
+            // Practice details live on the lawyer profile (munshis have none).
+            if (!isMunshi) {
+                const practice = { specialization: formData.specialization || null, bar_number: formData.bar_number || null };
+                const { data: updated, error: lawyerError } = await supabase.from('lawyers').update(practice).eq('user_id', user.id).select('id');
+                if (lawyerError) throw lawyerError;
+                if (!updated?.length) {
+                    const { error: insertError } = await supabase.from('lawyers').insert({ user_id: user.id, ...practice });
+                    if (insertError) throw insertError;
+                }
+            }
+
+            // Marked complete last, so a failure above leaves the profile step open.
             const { error: updateError } = await supabase
                 .from('users')
-                .update({
-                    full_name: formData.full_name,
-                    phone: formData.phone,
-                    specialization: formData.specialization,
-                    bar_number: formData.bar_number,
-                    status: 'active'
-                })
+                .update({ full_name: formData.full_name, phone: formData.phone, onboarding_completed: true })
                 .eq('id', user.id);
 
             if (updateError) throw updateError;
 
-            // Profile complete! Redirect to dashboard
+            // Done: the dashboard and the team roster read onboarding_completed.
             router.push('/dashboard');
         } catch (err: any) {
             setError(err.message || 'Failed to update profile');
@@ -258,7 +284,7 @@ export default function LawyerOnboardingPage() {
         <>
             <AuthHeading
                 lines={step === 'password' ? ['Secure', 'your account.'] : ['Finish', 'your profile.']}
-                intro={step === 'password' ? 'Set a secure password for your new workspace.' : 'Welcome to the firm. Tell us about your expertise.'}
+                intro={step === 'password' ? 'Set a secure password for your new workspace.' : isMunshi ? 'Welcome to the chamber. Confirm your name and number.' : 'Welcome to the firm. Tell us about your expertise.'}
             />
 
             {error && <AuthAlert>{error}</AuthAlert>}
@@ -313,21 +339,25 @@ export default function LawyerOnboardingPage() {
                         disabled={loading}
                         required
                     />
-                    <Field
-                        label="Specialization"
-                        placeholder="e.g., Corporate Law, Family Law"
-                        value={formData.specialization}
-                        onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                        disabled={loading}
-                        required
-                    />
-                    <Field
-                        label="Bar registration (optional)"
-                        placeholder="Registration number"
-                        value={formData.bar_number}
-                        onChange={(e) => setFormData({ ...formData, bar_number: e.target.value })}
-                        disabled={loading}
-                    />
+                    {!isMunshi && (
+                        <>
+                            <Field
+                                label="Specialization"
+                                placeholder="e.g., Corporate Law, Family Law"
+                                value={formData.specialization}
+                                onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                                disabled={loading}
+                                required
+                            />
+                            <Field
+                                label="Bar registration (optional)"
+                                placeholder="Registration number"
+                                value={formData.bar_number}
+                                onChange={(e) => setFormData({ ...formData, bar_number: e.target.value })}
+                                disabled={loading}
+                            />
+                        </>
+                    )}
                     <SubmitButton loading={loading} loadingLabel="Saving...">
                         Enter dashboard
                     </SubmitButton>

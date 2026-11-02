@@ -8,10 +8,22 @@ import { duesReminderText, formatMoney } from '@/lib/fees/ledger';
 import { getChamberName, getDues, type DueRow } from '@/lib/supabase/fees';
 import { MessageDialog } from './fee-dialogs';
 
-const casePath = (id: string) => `/dashboard/chambers-admin/cases/${id}`;
+const adminCasePath = (id: string) => `/dashboard/chambers-admin/cases/${id}`;
 
 /** Cases with a balance due, largest first, with a WhatsApp reminder per case. */
-export function DuesPanel({ chamberId, limit, onLoaded }: { chamberId?: string; limit?: number; onLoaded?: (dues: DueRow[]) => void }) {
+export function DuesPanel({
+    chamberId,
+    limit,
+    onLoaded,
+    casePath = adminCasePath,
+    allHref = '/dashboard/chambers-admin/fees',
+}: {
+    chamberId?: string;
+    limit?: number;
+    onLoaded?: (dues: DueRow[]) => void;
+    casePath?: (caseId: string) => string;
+    allHref?: string;
+}) {
     const [dues, setDues] = useState<DueRow[] | null>(null);
     const [chamberName, setChamberName] = useState<string | null>(null);
     const [reminding, setReminding] = useState<DueRow | null>(null);
@@ -34,7 +46,7 @@ export function DuesPanel({ chamberId, limit, onLoaded }: { chamberId?: string; 
             flush
             action={
                 limit ? (
-                    <Link href="/dashboard/chambers-admin/fees" className="l-link text-sm">
+                    <Link href={allHref} className="l-link text-sm">
                         All dues
                     </Link>
                 ) : undefined

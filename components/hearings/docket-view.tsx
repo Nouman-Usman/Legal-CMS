@@ -18,7 +18,7 @@ const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
  * The daily docket. Chamber admins see the whole chamber (filterable by lawyer) and
  * can reassign; lawyers see only their own appearances.
  */
-export function DocketView({ scope, casePath }: { scope: 'chamber' | 'lawyer'; casePath: (caseId: string) => string }) {
+export function DocketView({ scope, casePath, children }: { scope: 'chamber' | 'lawyer'; casePath: (caseId: string) => string; children?: React.ReactNode }) {
     const { user } = useAuth();
     const [day, setDay] = useState(() => shift(new Date(), 0));
     const [rows, setRows] = useState<DocketRow[]>([]);
@@ -207,6 +207,8 @@ export function DocketView({ scope, casePath }: { scope: 'chamber' | 'lawyer'; c
                     </Panel>
                 ))
             )}
+
+            {children}
 
             <RecordOutcomeDialog
                 hearing={recording}

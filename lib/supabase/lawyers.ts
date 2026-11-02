@@ -10,6 +10,7 @@ export interface RosterLawyer {
     bar_number?: string;
     status: 'active' | 'inactive' | 'pending';
     created_at: string;
+    role: 'lawyer' | 'munshi';
 }
 
 export async function getChamberRoster(chamberId: string) {
@@ -17,7 +18,7 @@ export async function getChamberRoster(chamberId: string) {
         .from('chamber_members')
         .select('is_active, joined_at, users:user_id!inner(id, email, full_name, phone, role, onboarding_completed, created_at, deleted_at)')
         .eq('chamber_id', chamberId)
-        .eq('users.role', 'lawyer');
+        .in('users.role', ['lawyer', 'munshi']);
     if (error) return { lawyers: [] as RosterLawyer[], error };
 
     const ids = (data ?? []).map((m: any) => m.users.id);
@@ -40,6 +41,7 @@ export async function getChamberRoster(chamberId: string) {
                 bar_number: p?.bar_number ?? undefined,
                 status: m.is_active === false ? 'inactive' : u.onboarding_completed ? 'active' : 'pending',
                 created_at: m.joined_at ?? u.created_at,
+                role: u.role === 'munshi' ? 'munshi' : 'lawyer',
             };
         })
         .sort((a, b) => b.created_at.localeCompare(a.created_at));

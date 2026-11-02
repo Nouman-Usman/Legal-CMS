@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { getChamberLawyers } from '@/lib/supabase/hearings';
 import { createClient as createChamberClient, getClientOptions } from '@/lib/supabase/clients';
+import { getCaseParties, setOpposingParties } from '@/lib/supabase/intake';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,8 @@ interface CaseFormModalProps {
   onSuccess?: () => void;
   caseData?: any;
   isEditing?: boolean;
+  /** A new case opened from a cleared (or waived) conflict check. */
+  prefill?: { client_name: string; client_phone?: string; description?: string; opposing: string[]; conflict_check_id: string };
 }
 
 const CASE_TYPES = [
@@ -45,6 +48,7 @@ export function CaseFormModal({
   onSuccess,
   caseData,
   isEditing = false,
+  prefill,
 }: CaseFormModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -52,6 +56,8 @@ export function CaseFormModal({
   const [clientOptions, setClientOptions] = useState<Array<{ id: string; full_name: string; phone: string | null }>>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  /** Opposing parties, one per line (they feed future conflict checks). */
+  const [opposing, setOpposing] = useState('');
 
   const [formData, setFormData] = useState({
     case_number: '',
@@ -108,8 +114,21 @@ export function CaseFormModal({
         filing_date: caseData.filing_date || '',
         next_hearing_date: caseData.next_hearing_date || '',
       });
+      getCaseParties(caseData.id).then(({ parties }) => setOpposing(parties.filter((p) => p.role === 'opposing').map((p) => p.name).join('\n')));
     }
   }, [isEditing, caseData]);
+
+  useEffect(() => {
+    if (!isOpen || isEditing || !prefill) return;
+    setFormData((prev) => ({
+      ...prev,
+      chamber_client_id: '',
+      client_name: prefill.client_name,
+      client_phone: prefill.client_phone || '',
+      description: prefill.description || prev.description,
+    }));
+    setOpposing(prefill.opposing.join('\n'));
+  }, [isOpen, isEditing, prefill]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({
@@ -178,13 +197,21 @@ export function CaseFormModal({
           .eq('id', caseData.id);
 
         if (updateError) throw updateError;
+        const { error: partiesError } = await setOpposingParties(caseData.id, opposing.split('\n'));
+        if (partiesError) throw partiesError;
         setSuccess('Case updated successfully!');
       } else {
         // Create new case
-        const { error: insertError } = await supabase.from('cases').insert([payload]);
+        const { data: created, error: insertError } = await supabase
+          .from('cases')
+          .insert([{ ...payload, conflict_check_id: prefill?.conflict_check_id ?? null }])
+          .select('id')
+          .single();
 
-        if (insertError) throw insertError;
-        setSuccess('Case created successfully!');
+        if (insertError || !created) throw insertError || new Error('Could not create the case');
+        const { error: partiesError } = await setOpposingParties(created.id, opposing.split('\n'));
+        // The case exists now; never leave the form open to create it twice.
+        setSuccess(partiesError ? 'Case created, but the opposing parties were not saved. Edit the case to add them.' : 'Case created successfully!');
       }
 
       setTimeout(() => {
@@ -365,6 +392,24 @@ export function CaseFormModal({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Opposing parties */}
+            <div className="space-y-2">
+              <Label htmlFor="opposing">Opposing parties</Label>
+              <Textarea
+                id="opposing"
+                placeholder={'One per line, e.g.\nProvince of Punjab through Chief Secretary'}
+                value={opposing}
+                onChange={(e) => setOpposing(e.target.value)}
+                rows={3}
+                className="bg-secondary border-input min-h-11"
+              />
+              <p className="text-xs text-muted-foreground">
+                {!isEditing && !prefill
+                  ? 'Tip: run a conflict check from Intake before opening a new matter.'
+                  : 'Used by future conflict checks.'}
+              </p>
             </div>
 
             {/* Priority and Status */}

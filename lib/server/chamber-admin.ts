@@ -58,7 +58,11 @@ export async function requireChamberAdmin() {
     };
 }
 
-/** The lawyer must be a member (any state) of the admin's chamber. */
+/** The lawyer or munshi must be a member (any state) of the admin's chamber. */
+/** Accounts an admin invites and manages: lawyers and munshis (clerks). */
+export const TEAM_ROLES = ['lawyer', 'munshi'] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
 export async function requireMemberLawyer(chamberId: string, lawyerId: string) {
     const { data } = await supabaseAdmin()
         .from('chamber_members')
@@ -67,7 +71,7 @@ export async function requireMemberLawyer(chamberId: string, lawyerId: string) {
         .eq('user_id', lawyerId)
         .maybeSingle();
     const user = (data as any)?.users;
-    if (!data || user?.role !== 'lawyer') throw new HttpError(404, 'Lawyer not found in your chamber');
+    if (!data || !TEAM_ROLES.includes(user?.role)) throw new HttpError(404, 'Team member not found in your chamber');
     return { membershipId: data.id as string, isActive: data.is_active !== false, user };
 }
 

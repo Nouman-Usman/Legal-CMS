@@ -6,10 +6,9 @@ import Link from 'next/link';
 import { signUp } from '@/lib/supabase/auth';
 import { Loader2, Check, Building, MailCheck, User } from 'lucide-react';
 import { AuthAlert, AuthHeading, AuthState, Field, SubmitButton } from '@/components/auth/auth-ui';
-import { UserRole } from '@/lib/contexts/auth-context';
-import { parseSignupRole } from '@/lib/landing/signup-role';
+import { parseSignupRole, type SignupRole } from '@/lib/landing/signup-role';
 
-const roleOptions: Array<{ id: UserRole; label: string; description: string; icon: React.ElementType }> = [
+const roleOptions: Array<{ id: SignupRole; label: string; description: string; icon: React.ElementType }> = [
   {
     id: 'chamber_admin',
     label: 'Create Chamber',
@@ -31,7 +30,7 @@ function SignupContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>(parseSignupRole(searchParams.get('role')) ?? 'client'); // Default to client
+  const [selectedRole, setSelectedRole] = useState<SignupRole>(parseSignupRole(searchParams.get('role')) ?? 'client'); // Default to client
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);

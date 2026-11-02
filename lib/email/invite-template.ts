@@ -8,7 +8,7 @@ export interface LawyerInvite {
     kind: 'invite' | 'reminder';
 }
 
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
     value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function assertSafeLink(link: string) {
@@ -19,7 +19,7 @@ function assertSafeLink(link: string) {
     }
 }
 
-const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
+export const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
 
 export function renderLawyerInvite(invite: LawyerInvite) {
     const { link, kind } = invite;

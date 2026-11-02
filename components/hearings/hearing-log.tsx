@@ -16,7 +16,18 @@ const STATUS_LABEL: Record<Hearing['status'], string> = {
 };
 
 /** The case's hearing history: every date, what happened, and the next date. */
-export function HearingLog({ caseId, chamberId, court }: { caseId: string; chamberId?: string; court?: string | null }) {
+export function HearingLog({
+    caseId,
+    chamberId,
+    court,
+    onOutcomeSaved,
+}: {
+    caseId: string;
+    chamberId?: string;
+    court?: string | null;
+    /** An outcome can add a deadline, so the case page refreshes its count. */
+    onOutcomeSaved?: () => void;
+}) {
     const [hearings, setHearings] = useState<Hearing[]>([]);
     const [loading, setLoading] = useState(true);
     const [recording, setRecording] = useState<Hearing | null>(null);
@@ -103,6 +114,7 @@ export function HearingLog({ caseId, chamberId, court }: { caseId: string; chamb
                 onSaved={(saved) => {
                     setRecording(null);
                     load();
+                    onOutcomeSaved?.();
                     setNotifying(saved);
                 }}
             />

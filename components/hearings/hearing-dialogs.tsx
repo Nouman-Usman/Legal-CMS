@@ -4,6 +4,8 @@ import { useEffect, useId, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DashAlert, DashDialog, DashField } from '@/components/dashboard/ui';
 import { getChamberLawyers, recordOutcome, scheduleHearing, type Hearing, type Outcome } from '@/lib/supabase/hearings';
+import { addDeadline } from '@/lib/supabase/deadlines';
+import { addDays, pkToday } from '@/lib/deadlines/limitation';
 
 const OUTCOMES: Array<{ value: Outcome['status']; label: string }> = [
     { value: 'adjourned', label: 'Adjourned' },
@@ -46,6 +48,10 @@ export function RecordOutcomeDialog({
     const [proceedings, setProceedings] = useState('');
     const [nextDate, setNextDate] = useState('');
     const [nextPurpose, setNextPurpose] = useState('');
+    const [direction, setDirection] = useState('');
+    const [withinDays, setWithinDays] = useState('');
+    /** The outcome saved but its deadline did not: only closing is safe now. */
+    const [savedOnly, setSavedOnly] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const proceedingsId = useId();
@@ -56,6 +62,9 @@ export function RecordOutcomeDialog({
         setProceedings('');
         setNextDate('');
         setNextPurpose(hearing.purpose ?? '');
+        setDirection('');
+        setWithinDays('');
+        setSavedOnly(false);
         setError('');
     }, [hearing]);
 
@@ -75,11 +84,29 @@ export function RecordOutcomeDialog({
             nextDate: nextDate ? dateToIso(nextDate) : undefined,
             nextPurpose,
         });
-        setSaving(false);
         if (error) {
+            setSaving(false);
             setError((error as { message?: string }).message || 'Could not save the outcome.');
             return;
         }
+        // The order's direction ("reply within 14 days") becomes a compliance deadline.
+        if (direction.trim() && Number(withinDays) > 0) {
+            const { error: deadlineError } = await addDeadline({
+                case_id: hearing.case_id,
+                kind: 'compliance',
+                title: direction,
+                due_date: addDays(pkToday(new Date(hearing.hearing_date)), Number(withinDays)),
+                source_hearing_id: hearing.id,
+                assigned_to: hearing.appearing_lawyer_id,
+            });
+            if (deadlineError) {
+                setSaving(false);
+                setError('Outcome saved, but the deadline could not be added. Add it from the Deadlines tab.');
+                setSavedOnly(true);
+                return;
+            }
+        }
+        setSaving(false);
         onSaved({ ...hearing, status, proceedings: proceedings || null });
     };
 
@@ -110,6 +137,10 @@ export function RecordOutcomeDialog({
                         onChange={(e) => setProceedings(e.target.value)}
                     />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-4">
+                    <DashField label="Order directs (optional)" placeholder="e.g. File reply" value={direction} onChange={(e) => setDirection(e.target.value)} />
+                    <DashField label="Within (days)" type="number" min="1" placeholder="e.g. 14" value={withinDays} onChange={(e) => setWithinDays(e.target.value)} required={!!direction.trim()} />
+                </div>
                 {status !== 'decided' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <DashField label={needsNext ? 'Next date *' : 'Next date'} type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required={needsNext} />
@@ -120,9 +151,15 @@ export function RecordOutcomeDialog({
                     <button type="button" className="l-btn l-btn--outline l-btn--compact" onClick={onClose}>
                         Cancel
                     </button>
-                    <button type="submit" className="l-btn l-btn--primary l-btn--compact" disabled={saving}>
-                        {saving && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />} Save outcome
-                    </button>
+                    {savedOnly ? (
+                        <button type="button" className="l-btn l-btn--primary l-btn--compact" onClick={() => onSaved({ ...hearing!, status, proceedings: proceedings || null })}>
+                            Continue
+                        </button>
+                    ) : (
+                        <button type="submit" className="l-btn l-btn--primary l-btn--compact" disabled={saving}>
+                            {saving && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />} Save outcome
+                        </button>
+                    )}
                 </div>
             </form>
         </DashDialog>

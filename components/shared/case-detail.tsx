@@ -11,6 +11,10 @@ import { TaskModal } from '@/components/shared/task-modal';
 import { DashAlert, DashDialog, EmptyState, Panel, StatusChip } from '@/components/dashboard/ui';
 import { HearingLog } from '@/components/hearings/hearing-log';
 import { CaseFeesPanel } from '@/components/fees/case-fees-panel';
+import { CaseDeadlines } from '@/components/deadlines/deadline-list';
+import { getCaseDeadlines, type Deadline } from '@/lib/supabase/deadlines';
+import { getCaseParties } from '@/lib/supabase/intake';
+import { dueBucket, pkToday } from '@/lib/deadlines/limitation';
 
 interface CaseDetailProps {
   caseId: string;
@@ -33,14 +37,18 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<CaseDocument | null>(null);
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+  const [opposing, setOpposing] = useState<string[]>([]);
 
   const loadCaseDetails = async () => {
     try {
-      const [caseResult, docsResult, tasksResult, notesResult] = await Promise.all([
+      const [caseResult, docsResult, tasksResult, notesResult, deadlinesResult, partiesResult] = await Promise.all([
         getCaseById(caseId),
         getCaseDocuments(caseId),
         getTasksByCase(caseId),
         getCaseNotes(caseId, user?.id),
+        getCaseDeadlines(caseId),
+        getCaseParties(caseId),
       ]);
 
       if (caseResult.error) throw caseResult.error;
@@ -49,6 +57,8 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
       setDocuments(docsResult.documents || []);
       setTasks(tasksResult.tasks || []);
       setNotes(notesResult.notes || []);
+      setDeadlines(deadlinesResult.deadlines);
+      setOpposing(partiesResult.parties.filter((p) => p.role === 'opposing').map((p) => p.name));
     } catch (err) {
       setError('Failed to load case details');
       console.error(err);
@@ -143,6 +153,10 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
     return <DashAlert>{error || 'Case not found'}</DashAlert>;
   }
 
+  const today = pkToday();
+  const openDeadlines = deadlines.filter((d) => d.status === 'open').length;
+  const overdue = deadlines.filter((d) => d.status === 'open' && dueBucket(d.due_date, today) === 'overdue').length;
+
   const facts = [
     { term: 'Type', value: caseData.case_type || 'N/A' },
     { term: 'Priority', value: caseData.priority },
@@ -160,7 +174,14 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
               <span className="l-label">Case #{caseData.case_number}</span>
               <h1 className="l-dash-title">{caseData.title}</h1>
             </div>
-            <StatusChip status={caseData.status}>{caseData.status?.toUpperCase()}</StatusChip>
+            <div className="flex flex-wrap items-center gap-2">
+              {overdue > 0 && (
+                <button type="button" className="l-chip l-chip--danger" onClick={() => setActiveTab('deadlines')}>
+                  {overdue} deadline{overdue === 1 ? '' : 's'} overdue
+                </button>
+              )}
+              <StatusChip status={caseData.status}>{caseData.status?.toUpperCase()}</StatusChip>
+            </div>
           </div>
           <dl className="grid grid-cols-2 lg:grid-cols-5 gap-4 m-0">
             {facts.map((fact) => (
@@ -177,6 +198,7 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
         <TabsList className="l-tabs">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="hearings">Hearings</TabsTrigger>
+          <TabsTrigger value="deadlines">Deadlines ({openDeadlines})</TabsTrigger>
           <TabsTrigger value="fees">Fees</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
@@ -190,6 +212,12 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
                 <dt className="l-label">Description</dt>
                 <dd className="m-0 leading-relaxed">{caseData.description}</dd>
               </div>
+              {opposing.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <dt className="l-label">Opposing parties</dt>
+                  <dd className="m-0 leading-relaxed">{opposing.join(' · ')}</dd>
+                </div>
+              )}
               {caseData.hearing_date && (
                 <div className="flex flex-col gap-1">
                   <dt className="l-label inline-flex items-center gap-1.5">
@@ -209,7 +237,16 @@ export function CaseDetail({ caseId }: CaseDetailProps) {
         </TabsContent>
 
         <TabsContent value="hearings">
-          <HearingLog caseId={caseId} chamberId={caseData.chamber_id} court={caseData.court} />
+          <HearingLog
+            caseId={caseId}
+            chamberId={caseData.chamber_id}
+            court={caseData.court}
+            onOutcomeSaved={() => getCaseDeadlines(caseId).then(({ deadlines }) => setDeadlines(deadlines))}
+          />
+        </TabsContent>
+
+        <TabsContent value="deadlines">
+          <CaseDeadlines caseId={caseId} chamberId={caseData.chamber_id} onChange={setDeadlines} />
         </TabsContent>
 
         <TabsContent value="fees">

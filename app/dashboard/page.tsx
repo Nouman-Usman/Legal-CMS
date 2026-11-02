@@ -20,6 +20,9 @@ export default function DashboardPage() {
         case 'lawyer':
           router.push('/dashboard/lawyer');
           break;
+        case 'munshi':
+          router.push('/dashboard/munshi');
+          break;
         case 'client':
           router.push('/dashboard/client');
           break;

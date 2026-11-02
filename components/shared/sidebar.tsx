@@ -19,6 +19,8 @@ import {
     Gavel,
     CalendarClock,
     Wallet,
+    AlarmClock,
+    SearchCheck,
     Search,
     PenTool,
     MessageSquare,
@@ -73,9 +75,11 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                     label: 'Management',
                     items: [
                         { name: 'Daily Docket', href: '/dashboard/chambers-admin/docket', icon: CalendarClock },
+                        { name: 'Deadlines', href: '/dashboard/chambers-admin/deadlines', icon: AlarmClock },
                         { name: 'All Cases', href: '/dashboard/chambers-admin/cases', icon: Briefcase },
                         { name: 'All Lawyers', href: '/dashboard/chambers-admin/lawyers', icon: Gavel },
                         { name: 'Our Clients', href: '/dashboard/chambers-admin/clients', icon: Users },
+                        { name: 'Intake', href: '/dashboard/chambers-admin/intake', icon: SearchCheck },
                         { name: 'Fees & Dues', href: '/dashboard/chambers-admin/fees', icon: Wallet },
                     ]
                 },
@@ -90,6 +94,20 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                     items: [
                         { name: 'Calendar', href: '/dashboard/chambers-admin/calendar', icon: Calendar },
                         { name: 'Settings', href: '/dashboard/chambers-admin/settings', icon: Settings },
+                    ]
+                }
+            ];
+        }
+
+        if (userRole === 'munshi') {
+            return [
+                {
+                    label: 'Daily',
+                    items: [
+                        { name: 'Today', href: '/dashboard/munshi', icon: CalendarClock },
+                        { name: 'Cases', href: '/dashboard/munshi/cases', icon: Briefcase },
+                        { name: 'Deadlines', href: '/dashboard/munshi/deadlines', icon: AlarmClock },
+                        { name: 'To Collect', href: '/dashboard/munshi/collect', icon: Wallet },
                     ]
                 }
             ];
@@ -186,7 +204,7 @@ export function Sidebar({ isCollapsed, onToggle, variant = 'column', onNavigate 
                         {!collapsed && <span className="l-label">{group.label}</span>}
                         <ul>
                             {group.items.map((item) => {
-                                const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/' && !['/dashboard/chambers-admin', '/dashboard/lawyer', '/dashboard/client'].includes(item.href) && pathname.startsWith(item.href + '/'));
+                                const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/' && !['/dashboard/chambers-admin', '/dashboard/lawyer', '/dashboard/munshi', '/dashboard/client'].includes(item.href) && pathname.startsWith(item.href + '/'));
                                 return (
                                     <li key={item.href}>
                                         <Link

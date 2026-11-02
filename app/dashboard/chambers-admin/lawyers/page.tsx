@@ -49,6 +49,7 @@ interface Lawyer {
   bar_number?: string;
   status: 'active' | 'inactive' | 'pending';
   created_at: string;
+  role: 'lawyer' | 'munshi';
 }
 
 export default function LawyersPage() {
@@ -62,9 +63,10 @@ export default function LawyersPage() {
   const [inviteLink, setInviteLink] = useState('');
 
   // Form state for adding lawyer
-  const [newLawyer, setNewLawyer] = useState({
+  const [newLawyer, setNewLawyer] = useState<{ email: string; full_name: string; role: 'lawyer' | 'munshi' }>({
     email: '',
     full_name: '',
+    role: 'lawyer',
   });
   const [addingLawyer, setAddingLawyer] = useState(false);
 
@@ -143,9 +145,9 @@ export default function LawyersPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to add lawyer');
 
-      setSuccess('Lawyer invitation email sent successfully!');
+      setSuccess(`${newLawyer.role === 'munshi' ? 'Munshi' : 'Lawyer'} invitation email sent successfully!`);
       if (result.inviteLink) setInviteLink(result.inviteLink);
-      setNewLawyer({ email: '', full_name: '' });
+      setNewLawyer({ email: '', full_name: '', role: 'lawyer' });
       setShowAddModal(false);
       fetchLawyers();
     } catch (err: any) {
@@ -263,13 +265,13 @@ export default function LawyersPage() {
           description="Managing our network of lawyers and legal professionals."
           actions={
             <button type="button" onClick={() => setShowAddModal(true)} className="l-btn l-btn--primary l-btn--compact">
-              <UserPlus aria-hidden="true" className="w-4 h-4" /> Add New Lawyer
+              <UserPlus aria-hidden="true" className="w-4 h-4" /> Add Team Member
             </button>
           }
         />
 
         <div className="l-stats">
-          <StatTile label="Total Lawyers" value={lawyers.filter((l) => l.status !== 'inactive').length} icon={Gavel} />
+          <StatTile label="Total Lawyers" value={lawyers.filter((l) => l.status !== 'inactive' && l.role === 'lawyer').length} hint={`${lawyers.filter((l) => l.status !== 'inactive' && l.role === 'munshi').length} munshi`} icon={Gavel} />
           <StatTile label="Active Lawyers" value={lawyers.filter((l) => l.status === 'active').length} icon={ShieldCheck} />
           <StatTile label="Pending Invitations" value={lawyers.filter((l) => l.status === 'pending').length} icon={Send} />
         </div>
@@ -324,9 +326,11 @@ export default function LawyersPage() {
                             <DropdownMenuItem onClick={() => { setViewingLawyer(lawyer); setShowViewModal(true); }}>
                               <Eye aria-hidden="true" className="w-4 h-4" /> View Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setEditingLawyer(lawyer); setShowEditModal(true); }}>
-                              <Edit aria-hidden="true" className="w-4 h-4" /> Edit Details
-                            </DropdownMenuItem>
+                            {lawyer.role === 'lawyer' && (
+                              <DropdownMenuItem onClick={() => { setEditingLawyer(lawyer); setShowEditModal(true); }}>
+                                <Edit aria-hidden="true" className="w-4 h-4" /> Edit Details
+                              </DropdownMenuItem>
+                            )}
                             {lawyer.status === 'pending' && (
                               <DropdownMenuItem onClick={() => handleResendInvite(lawyer)} disabled={resendingInvite === lawyer.id}>
                                 <Send aria-hidden="true" className="w-4 h-4" /> Resend Invite
@@ -338,7 +342,7 @@ export default function LawyersPage() {
                               </DropdownMenuItem>
                             ) : (
                               <DropdownMenuItem onClick={() => handleRemoveLawyer(lawyer.id)} className="text-destructive">
-                                <Trash2 aria-hidden="true" className="w-4 h-4" /> Remove Lawyer
+                                <Trash2 aria-hidden="true" className="w-4 h-4" /> Remove from Chamber
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -347,7 +351,7 @@ export default function LawyersPage() {
                     </div>
                     <div className="flex flex-col gap-1 min-w-0">
                       <h3 className="m-0 text-base font-semibold truncate">{lawyer.full_name}</h3>
-                      <p className="m-0 text-sm l-muted">{lawyer.specialization || 'Counsel-at-Law'}</p>
+                      <p className="m-0 text-sm l-muted">{lawyer.role === 'munshi' ? 'Munshi (chamber clerk)' : lawyer.specialization || 'Counsel-at-Law'}</p>
                     </div>
                     <ul className="flex flex-col gap-1.5 m-0 p-0 list-none text-sm l-muted">
                       <li className="flex items-center gap-2 min-w-0">
@@ -358,9 +362,11 @@ export default function LawyersPage() {
                           <Phone aria-hidden="true" className="w-4 h-4 shrink-0" /> {lawyer.phone}
                         </li>
                       )}
-                      <li className="flex items-center gap-2">
-                        <Briefcase aria-hidden="true" className="w-4 h-4 shrink-0" /> Bar: {lawyer.bar_number || 'PENDING'}
-                      </li>
+                      {lawyer.role === 'lawyer' && (
+                        <li className="flex items-center gap-2">
+                          <Briefcase aria-hidden="true" className="w-4 h-4 shrink-0" /> Bar: {lawyer.bar_number || 'PENDING'}
+                        </li>
+                      )}
                     </ul>
                     <button
                       type="button"
@@ -377,19 +383,32 @@ export default function LawyersPage() {
         </div>
       </DashPage>
 
-      <DashDialog open={showAddModal} onOpenChange={setShowAddModal} title="Add New Lawyer" description="Enter the lawyer's details to send an invitation.">
+      <DashDialog open={showAddModal} onOpenChange={setShowAddModal} title="Add Team Member" description="We email them a link to set a password and join your chamber.">
         <form onSubmit={handleAddLawyer} className="l-form">
+          <fieldset className="flex flex-col gap-2 m-0 p-0 border-0">
+            <legend className="l-label mb-2">Role</legend>
+            <div className="flex flex-wrap gap-2">
+              {(['lawyer', 'munshi'] as const).map((role) => (
+                <button key={role} type="button" className="l-filter" aria-pressed={newLawyer.role === role} onClick={() => setNewLawyer({ ...newLawyer, role })}>
+                  {role === 'lawyer' ? 'Lawyer' : 'Munshi (clerk)'}
+                </button>
+              ))}
+            </div>
+            {newLawyer.role === 'munshi' && (
+              <p className="m-0 text-xs l-muted">A munshi runs the docket, records hearing outcomes, uploads documents, records payments and adds deadlines. They cannot manage the team, settings, fee agreements or void entries.</p>
+            )}
+          </fieldset>
           <DashField
-            label="Professional Email *"
+            label="Email *"
             type="email"
-            placeholder="counsel@chambers.com"
+            placeholder={newLawyer.role === 'munshi' ? 'munshi@chambers.com' : 'counsel@chambers.com'}
             value={newLawyer.email}
             onChange={(e) => setNewLawyer({ ...newLawyer, email: e.target.value })}
             required
           />
           <DashField
             label="Full Name *"
-            placeholder="Enter lawyer's full name"
+            placeholder="Enter full name"
             value={newLawyer.full_name}
             onChange={(e) => setNewLawyer({ ...newLawyer, full_name: e.target.value })}
             required
